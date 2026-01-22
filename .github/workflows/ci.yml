@@ -1,0 +1,52 @@
+name: Build
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate manifests
+        run: node scripts/validate.js
+
+      - name: Bump version
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: node scripts/bump-version.js
+
+      - name: Commit version bump
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add manifests/*.json basic-auth-extension/manifest.json
+            version=$(node -p "require('./manifests/manifest.base.mv3.json').version")
+            git commit -m "chore: bump version to ${version}"
+            git push
+          fi
+
+      - name: Build bundles
+        run: node scripts/build.js
+
+      - name: Upload bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: multipass-bundles
+          path: dist/*.zip
