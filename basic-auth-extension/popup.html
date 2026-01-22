@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Basic Auth</title>
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div>
+          <h1>Multi pass</h1>
+          <p class="subtitle">Regex rules for the current tab</p>
+        </div>
+        <div class="status-pill" id="status">
+          <span class="status-dot status-idle" id="status-dot"></span>
+          <span id="status-text">Idle</span>
+        </div>
+      </header>
+
+      <section class="actions">
+        <button id="open-options" type="button" class="secondary">Import/Export</button>
+        <button id="add-rule" type="button">Add rule</button>
+      </section>
+
+      <section class="rules">
+        <div class="rules-header">
+          <span>Rules</span>
+          <span id="rule-count" class="count">0</span>
+        </div>
+        <div id="rules-list" class="rules-list"></div>
+        <div id="empty-state" class="empty-state">No rules yet.</div>
+      </section>
+    </div>
+
+    <script src="lib/Sortable.min.js"></script>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

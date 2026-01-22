@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="options.css" />
+    <title>Basic Auth Settings</title>
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>Import / Export</h1>
+          <p>Merge rule sets without losing existing entries.</p>
+        </div>
+        <div class="summary" id="summary">Rules: 0</div>
+      </header>
+
+      <section class="panel">
+        <h2>Export</h2>
+        <p>Download all rules as JSON for backup or sharing.</p>
+        <button id="export-btn" type="button">Download JSON</button>
+        <div id="export-result" class="result" hidden></div>
+      </section>
+
+      <section class="panel">
+        <h2>Import</h2>
+        <p>Merge rules from a JSON file. Existing IDs are replaced.</p>
+        <div class="import-controls">
+          <input id="import-file" type="file" accept="application/json" />
+          <button id="import-btn" type="button">Import JSON</button>
+        </div>
+        <div id="import-result" class="result" hidden></div>
+      </section>
+
+      <section class="panel">
+        <h2>Sync from URL</h2>
+        <p>Add a HTTPS link to a JSON snippet (GitLab snippet links are supported).</p>
+        <div class="sync-controls">
+          <input id="sync-label" type="text" placeholder="Label (optional)" />
+          <input id="sync-url" type="url" placeholder="https://..." />
+          <button id="sync-add" type="button">Add source</button>
+        </div>
+        <div id="sync-result" class="result" hidden></div>
+        <div id="sync-list" class="sync-list"></div>
+        <div id="sync-empty" class="empty-state" hidden>No sync sources yet.</div>
+      </section>
+
+      <section class="panel">
+        <h2>Rules</h2>
+        <p>Ordered by priority from top to bottom.</p>
+        <div id="rules-list" class="rules-list"></div>
+        <div id="rules-empty" class="empty-state" hidden>No rules yet.</div>
+      </section>
+    </main>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

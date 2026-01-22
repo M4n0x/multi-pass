@@ -1,0 +1,41 @@
+const RULES_KEY = "rules";
+const SYNC_SOURCES_KEY = "syncSources";
+
+export async function getRules() {
+  const result = await chrome.storage.local.get(RULES_KEY);
+  return Array.isArray(result[RULES_KEY]) ? result[RULES_KEY] : [];
+}
+
+export async function saveRules(rules) {
+  await chrome.storage.local.set({ [RULES_KEY]: rules });
+  return rules;
+}
+
+export async function getSyncSources() {
+  const result = await chrome.storage.local.get(SYNC_SOURCES_KEY);
+  return Array.isArray(result[SYNC_SOURCES_KEY]) ? result[SYNC_SOURCES_KEY] : [];
+}
+
+export async function saveSyncSources(syncSources) {
+  await chrome.storage.local.set({ [SYNC_SOURCES_KEY]: syncSources });
+  return syncSources;
+}
+
+export function generateId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+export function isValidRegex(pattern) {
+  if (!pattern || typeof pattern !== "string") {
+    return false;
+  }
+  try {
+    new RegExp(pattern);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
