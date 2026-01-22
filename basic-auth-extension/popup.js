@@ -3,6 +3,7 @@ import { generateId, getRules, isValidRegex, saveRules } from "./shared/storage.
 
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
+const versionLabel = document.getElementById("app-version");
 const rulesList = document.getElementById("rules-list");
 const emptyState = document.getElementById("empty-state");
 const ruleCount = document.getElementById("rule-count");
@@ -579,6 +580,10 @@ function initSortable() {
 async function init() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   currentTab = tabs[0] || null;
+  if (versionLabel) {
+    const manifest = chrome.runtime.getManifest();
+    versionLabel.textContent = `v${manifest.version}`;
+  }
   await loadRules();
   await refreshStatus();
 }
