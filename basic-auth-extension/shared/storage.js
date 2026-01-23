@@ -2,20 +2,12 @@ const RULES_KEY = "rules";
 const SYNC_SOURCES_KEY = "syncSources";
 
 function storageGet(key) {
-  const result = chrome.storage.local.get(key);
-  if (result && typeof result.then === "function") {
-    return result;
-  }
   return new Promise((resolve) => {
-    chrome.storage.local.get(key, (items) => resolve(items));
+    chrome.storage.local.get(key, (items) => resolve(items || {}));
   });
 }
 
 function storageSet(values) {
-  const result = chrome.storage.local.set(values);
-  if (result && typeof result.then === "function") {
-    return result;
-  }
   return new Promise((resolve) => {
     chrome.storage.local.set(values, () => resolve());
   });
