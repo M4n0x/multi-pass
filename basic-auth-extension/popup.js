@@ -197,6 +197,21 @@ function createEyeIcon() {
   return svg;
 }
 
+function escapePassword(value) {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\t/g, "\\t")
+    .replace(/\n/g, "\\n")
+    .replace(/\r/g, "\\r");
+}
+
+function unescapePassword(value) {
+  const placeholder = "__BACKSLASH__";
+  let result = value.replace(/\\\\/g, placeholder);
+  result = result.replace(/\\t/g, "\t").replace(/\\n/g, "\n").replace(/\\r/g, "\r");
+  return result.replace(new RegExp(placeholder, "g"), "\\");
+}
+
 function createRuleCard(rule) {
   const baseValues = {
     name: rule.name || "",
@@ -305,6 +320,7 @@ function createRuleCard(rule) {
     "",
     { action: toggleButton }
   );
+  passInput.value = escapePassword(baseValues.password);
 
   const footer = document.createElement("div");
   footer.className = "rule-footer";
@@ -331,7 +347,7 @@ function createRuleCard(rule) {
     name: nameInput.value.trim(),
     pattern: patternInput.value.trim(),
     username: userInput.value,
-    password: passInput.value,
+    password: unescapePassword(passInput.value),
     enabled: enabledInput.checked
   });
 
@@ -371,7 +387,7 @@ function createRuleCard(rule) {
     nameInput.value = baseValues.name;
     patternInput.value = baseValues.pattern;
     userInput.value = baseValues.username;
-    passInput.value = baseValues.password;
+    passInput.value = escapePassword(baseValues.password);
     passInput.type = "password";
     toggleButton.classList.remove("is-visible");
     toggleButton.setAttribute("aria-label", "Show password");

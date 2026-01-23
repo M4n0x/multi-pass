@@ -81,6 +81,14 @@ function selectRule(matches) {
   return matches[0];
 }
 
+function shouldKeepAuthFailed(tabId, ruleId) {
+  if (!ruleId) {
+    return false;
+  }
+  const existing = tabStatus.get(tabId);
+  return Boolean(existing && existing.state === STATUS.AUTH_FAILED && existing.ruleId === ruleId);
+}
+
 async function updateTabStatusForUrl(tabId, url) {
   if (tabId < 0) {
     return;
@@ -107,6 +115,16 @@ async function updateTabStatusForUrl(tabId, url) {
     return;
   }
   const selected = matches[0];
+  if (shouldKeepAuthFailed(tabId, selected?.id)) {
+    setTabStatus(
+      tabId,
+      STATUS.AUTH_FAILED,
+      selected?.id || null,
+      url,
+      [selected?.id].filter(Boolean)
+    );
+    return;
+  }
   setTabStatus(tabId, STATUS.OK, selected?.id || null, url, [selected?.id].filter(Boolean));
 }
 
@@ -156,7 +174,17 @@ async function handleAuth(details) {
       matches.map((rule) => rule.id).filter(Boolean)
     );
   } else {
-    setTabStatus(tabId, STATUS.OK, selected?.id || null, url, [selected?.id].filter(Boolean));
+    if (shouldKeepAuthFailed(tabId, selected?.id)) {
+      setTabStatus(
+        tabId,
+        STATUS.AUTH_FAILED,
+        selected?.id || null,
+        url,
+        [selected?.id].filter(Boolean)
+      );
+    } else {
+      setTabStatus(tabId, STATUS.OK, selected?.id || null, url, [selected?.id].filter(Boolean));
+    }
   }
 
   return {
