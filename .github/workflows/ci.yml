@@ -52,10 +52,6 @@ jobs:
       - name: Validate manifests
         run: node scripts/validate.js
 
-      - name: Read version
-        id: version
-        run: echo "version=$(node -p \"require('./manifests/manifest.base.mv3.json').version\")" >> "$GITHUB_OUTPUT"
-
       - name: Build bundles
         run: node scripts/build.js
 
@@ -63,19 +59,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: multipass-chromium
-          path: dist/multipass-chromium-v${{ steps.version.outputs.version }}.zip
+          path: dist/multipass-chromium-v*.zip
 
       - name: Upload Firefox MV3 bundle
         uses: actions/upload-artifact@v4
         with:
           name: multipass-firefox-mv3
-          path: dist/multipass-firefox-mv3-v${{ steps.version.outputs.version }}.zip
+          path: dist/multipass-firefox-mv3-v*.zip
 
       - name: Upload Firefox MV2 bundle
         uses: actions/upload-artifact@v4
         with:
           name: multipass-firefox-mv2
-          path: dist/multipass-firefox-mv2-v${{ steps.version.outputs.version }}.zip
+          path: dist/multipass-firefox-mv2-v*.zip
 
       - name: Create release
         if: >-
@@ -85,7 +81,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          version="${{ steps.version.outputs.version }}"
+          version=$(node -p "require('./manifests/manifest.base.mv3.json').version")
           tag="v${version}"
           if ! git rev-parse "${tag}" >/dev/null 2>&1; then
             git tag "${tag}"
@@ -94,6 +90,6 @@ jobs:
           if ! gh release view "${tag}" >/dev/null 2>&1; then
             gh release create "${tag}" --title "${tag}" --notes "Automated release"
           fi
-          gh release upload "${tag}" dist/multipass-chromium-v${version}.zip --clobber
-          gh release upload "${tag}" dist/multipass-firefox-mv3-v${version}.zip --clobber
-          gh release upload "${tag}" dist/multipass-firefox-mv2-v${version}.zip --clobber
+          gh release upload "${tag}" dist/multipass-chromium-v*.zip --clobber
+          gh release upload "${tag}" dist/multipass-firefox-mv3-v*.zip --clobber
+          gh release upload "${tag}" dist/multipass-firefox-mv2-v*.zip --clobber
