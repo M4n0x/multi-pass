@@ -1,23 +1,43 @@
 const RULES_KEY = "rules";
 const SYNC_SOURCES_KEY = "syncSources";
 
+function storageGet(key) {
+  const result = chrome.storage.local.get(key);
+  if (result && typeof result.then === "function") {
+    return result;
+  }
+  return new Promise((resolve) => {
+    chrome.storage.local.get(key, (items) => resolve(items));
+  });
+}
+
+function storageSet(values) {
+  const result = chrome.storage.local.set(values);
+  if (result && typeof result.then === "function") {
+    return result;
+  }
+  return new Promise((resolve) => {
+    chrome.storage.local.set(values, () => resolve());
+  });
+}
+
 export async function getRules() {
-  const result = await chrome.storage.local.get(RULES_KEY);
+  const result = await storageGet(RULES_KEY);
   return Array.isArray(result[RULES_KEY]) ? result[RULES_KEY] : [];
 }
 
 export async function saveRules(rules) {
-  await chrome.storage.local.set({ [RULES_KEY]: rules });
+  await storageSet({ [RULES_KEY]: rules });
   return rules;
 }
 
 export async function getSyncSources() {
-  const result = await chrome.storage.local.get(SYNC_SOURCES_KEY);
+  const result = await storageGet(SYNC_SOURCES_KEY);
   return Array.isArray(result[SYNC_SOURCES_KEY]) ? result[SYNC_SOURCES_KEY] : [];
 }
 
 export async function saveSyncSources(syncSources) {
-  await chrome.storage.local.set({ [SYNC_SOURCES_KEY]: syncSources });
+  await storageSet({ [SYNC_SOURCES_KEY]: syncSources });
   return syncSources;
 }
 
