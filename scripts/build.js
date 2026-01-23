@@ -13,21 +13,21 @@ const targets = [
     manifestBase: "manifest.base.mv3.json",
     manifestOverride: "manifest.chromium.json",
     outputDir: "chromium",
-    zipName: "multipass-chromium.zip"
+    zipBase: "multipass-chromium"
   },
   {
     name: "firefox-mv3",
     manifestBase: "manifest.base.mv3.json",
     manifestOverride: "manifest.firefox.mv3.json",
     outputDir: "firefox-mv3",
-    zipName: "multipass-firefox-mv3.zip"
+    zipBase: "multipass-firefox-mv3"
   },
   {
     name: "firefox-mv2",
     manifestBase: null,
     manifestOverride: "manifest.firefox.mv2.json",
     outputDir: "firefox-mv2",
-    zipName: "multipass-firefox-mv2.zip"
+    zipBase: "multipass-firefox-mv2"
   }
 ];
 
@@ -86,7 +86,9 @@ async function buildTarget(target) {
   }
 
   await writeManifest(targetDir, manifest);
-  zipTarget(targetDir, target.zipName);
+  const version = manifest.version;
+  const zipName = `${target.zipBase}-v${version}.zip`;
+  zipTarget(targetDir, zipName);
 }
 
 async function main() {
