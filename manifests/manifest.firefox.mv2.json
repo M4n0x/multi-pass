@@ -33,7 +33,7 @@
   "options_page": "options.html",
   "browser_specific_settings": {
     "gecko": {
-      "id": "ABCA853E-0F54-42CD-A559-A3E3E06D0BF6",
+      "id": "multi-pass@stevereis.ch",
       "strict_min_version": "109.0",
       "data_collection_permissions": {
         "required": [
