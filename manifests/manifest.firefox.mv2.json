@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Multi-pass V2",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "description": "Multi-pass to make HTTP basic auth easier.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -17,7 +17,9 @@
     "<all_urls>"
   ],
   "background": {
-    "scripts": ["background-mv2.js"]
+    "scripts": [
+      "background-mv2.js"
+    ]
   },
   "browser_action": {
     "default_title": "Multi pass",
@@ -34,7 +36,9 @@
       "id": "ABCA853E-0F54-42CD-A559-A3E3E06D0BF6",
       "strict_min_version": "109.0",
       "data_collection_permissions": {
-        "required": ["none"],
+        "required": [
+          "none"
+        ],
         "optional": [],
         "has_previous_consent": false
       }
