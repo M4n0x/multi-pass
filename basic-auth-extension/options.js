@@ -11,6 +11,8 @@ const exportButton = document.getElementById("export-btn");
 const exportResult = document.getElementById("export-result");
 const importButton = document.getElementById("import-btn");
 const importFile = document.getElementById("import-file");
+const importText = document.getElementById("import-text");
+const importPasteButton = document.getElementById("import-paste-btn");
 const importResult = document.getElementById("import-result");
 const summary = document.getElementById("summary");
 const rulesList = document.getElementById("rules-list");
@@ -343,49 +345,68 @@ async function handleExport() {
   showExportResult("Exported rules successfully.");
 }
 
-async function handleImport() {
+async function applyIncomingRules(incoming) {
+  const existing = await getRules();
+  const existingById = new Map(existing.map((rule, index) => [rule.id, index]));
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+  const newRules = [];
+  const merged = [...existing];
+
+  for (const entry of incoming) {
+    const rule = sanitizeRule(entry);
+    if (!rule) {
+      skipped += 1;
+      continue;
+    }
+    if (existingById.has(rule.id)) {
+      const index = existingById.get(rule.id);
+      merged[index] = rule;
+      updated += 1;
+    } else {
+      newRules.push(rule);
+      added += 1;
+    }
+  }
+
+  const nextRules = [...newRules, ...merged];
+  await saveRules(nextRules);
+  await refreshView();
+  showImportResult(`Import complete: ${added} added, ${updated} updated, ${skipped} skipped.`);
+}
+
+async function handleFileImport() {
   const file = importFile.files?.[0];
   if (!file) {
-    showImportResult("Select a JSON file to import.", true);
+    showImportResult("Select a JSON or text file to import.", true);
     return;
   }
   try {
     const text = await file.text();
     const parsed = JSON.parse(text);
     const incoming = parseIncomingRules(parsed);
-
-    const existing = await getRules();
-    const existingById = new Map(existing.map((rule, index) => [rule.id, index]));
-    let added = 0;
-    let updated = 0;
-    let skipped = 0;
-    const newRules = [];
-    const merged = [...existing];
-
-    for (const entry of incoming) {
-      const rule = sanitizeRule(entry);
-      if (!rule) {
-        skipped += 1;
-        continue;
-      }
-      if (existingById.has(rule.id)) {
-        const index = existingById.get(rule.id);
-        merged[index] = rule;
-        updated += 1;
-      } else {
-        newRules.push(rule);
-        added += 1;
-      }
-    }
-
-    const nextRules = [...newRules, ...merged];
-    await saveRules(nextRules);
-    await refreshView();
-    showImportResult(`Import complete: ${added} added, ${updated} updated, ${skipped} skipped.`);
+    await applyIncomingRules(incoming);
   } catch (error) {
     showImportResult("Import failed. Ensure the file is valid JSON.", true);
   } finally {
     importFile.value = "";
+  }
+}
+
+async function handlePasteImport() {
+  const text = importText.value.trim();
+  if (!text) {
+    showImportResult("Paste JSON to import.", true);
+    return;
+  }
+  try {
+    const parsed = JSON.parse(text);
+    const incoming = parseIncomingRules(parsed);
+    await applyIncomingRules(incoming);
+    importText.value = "";
+  } catch (error) {
+    showImportResult("Import failed. Ensure the pasted JSON is valid.", true);
   }
 }
 
@@ -485,7 +506,8 @@ async function removeSyncSource(sourceId) {
 }
 
 exportButton.addEventListener("click", handleExport);
-importButton.addEventListener("click", handleImport);
+importButton.addEventListener("click", handleFileImport);
+importPasteButton.addEventListener("click", handlePasteImport);
 syncAddButton.addEventListener("click", addSyncSource);
 
 chrome.storage.onChanged.addListener((changes, areaName) => {

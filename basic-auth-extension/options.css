@@ -214,6 +214,11 @@ button {
   align-items: center;
 }
 
+.import-paste {
+  display: grid;
+  gap: 10px;
+}
+
 input[type="file"] {
   border: 1px solid #cbd2d9;
   padding: 8px 10px;
@@ -221,6 +226,18 @@ input[type="file"] {
   background: #f8fafc;
   font-size: 13px;
   min-width: 240px;
+}
+
+#import-text {
+  border: 1px solid #cbd2d9;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 12px;
+  min-height: 140px;
+  resize: vertical;
+  font-family: "SFMono-Regular", "Menlo", "Monaco", monospace;
+  color: #1f2933;
 }
 
 .result {

@@ -25,10 +25,18 @@
 
       <section class="panel">
         <h2>Import</h2>
-        <p>Merge rules from a JSON file. Existing IDs are replaced.</p>
+        <p>Merge rules from a JSON file or pasted JSON. Existing IDs are replaced.</p>
         <div class="import-controls">
-          <input id="import-file" type="file" accept="application/json" />
-          <button id="import-btn" type="button">Import JSON</button>
+          <input
+            id="import-file"
+            type="file"
+            accept="application/json,text/plain,.json,.txt"
+          />
+          <button id="import-btn" type="button">Import file</button>
+        </div>
+        <div class="import-paste">
+          <textarea id="import-text" placeholder="Paste JSON here"></textarea>
+          <button id="import-paste-btn" type="button">Import pasted JSON</button>
         </div>
         <div id="import-result" class="result" hidden></div>
       </section>
