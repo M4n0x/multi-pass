@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "Multi-pass V2",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Multi-pass to make HTTP basic auth easier.",
   "icons": {
     "16": "icons/icon-16.png",
