@@ -26,6 +26,24 @@ let conflictRuleIds = [];
 const expandedRuleIds = new Set();
 let sortableInstance = null;
 
+function queryTabs(queryInfo) {
+  return new Promise((resolve) => {
+    chrome.tabs.query(queryInfo, (tabs) => resolve(tabs || []));
+  });
+}
+
+function sendRuntimeMessage(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+        return;
+      }
+      resolve(response);
+    });
+  });
+}
+
 function escapeRegex(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -54,7 +72,7 @@ async function refreshStatus() {
     applyActiveRuleIndicators();
     return;
   }
-  const response = await chrome.runtime.sendMessage({
+  const response = await sendRuntimeMessage({
     type: "getTabStatus",
     tabId: currentTab.id
   });
@@ -594,7 +612,7 @@ function initSortable() {
 }
 
 async function init() {
-  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tabs = await queryTabs({ active: true, currentWindow: true });
   currentTab = tabs[0] || null;
   if (versionLabel) {
     const manifest = chrome.runtime.getManifest();
