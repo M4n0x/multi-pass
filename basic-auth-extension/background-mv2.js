@@ -154,6 +154,12 @@ function handleAuth(details) {
 
   const selected = selectRule(matches);
   const hasConflict = matches.length > 1;
+
+  // If auth already failed for this tab/rule, let browser show native prompt
+  if (shouldKeepAuthFailed(tabId, selected ? selected.id : null)) {
+    return {};
+  }
+
   const requestId = details.requestId;
   const existing = requestMeta.get(requestId);
 
@@ -162,7 +168,8 @@ function handleAuth(details) {
     if (!existing.conflict) {
       setTabStatus(tabId, STATUS.AUTH_FAILED, selected ? selected.id : null, url, [selected ? selected.id : null].filter(Boolean));
     }
-    return { cancel: true };
+    // Auth failed, let browser show native prompt
+    return {};
   }
 
   requestMeta.set(requestId, {
@@ -181,17 +188,7 @@ function handleAuth(details) {
       matches.map((rule) => rule.id).filter(Boolean)
     );
   } else {
-    if (shouldKeepAuthFailed(tabId, selected ? selected.id : null)) {
-      setTabStatus(
-        tabId,
-        STATUS.AUTH_FAILED,
-        selected ? selected.id : null,
-        url,
-        [selected ? selected.id : null].filter(Boolean)
-      );
-    } else {
-      setTabStatus(tabId, STATUS.OK, selected ? selected.id : null, url, [selected ? selected.id : null].filter(Boolean));
-    }
+    setTabStatus(tabId, STATUS.OK, selected ? selected.id : null, url, [selected ? selected.id : null].filter(Boolean));
   }
 
   return {
@@ -255,6 +252,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message.type === "refreshTabStatus") {
     updateTabStatusForUrl(message.tabId, message.url);
+    return false;
+  }
+  if (message.type === "clearAuthFailed") {
+    const ruleId = message.ruleId;
+    for (const [tabId, status] of tabStatus.entries()) {
+      if (status.state === STATUS.AUTH_FAILED && status.ruleId === ruleId) {
+        tabStatus.delete(tabId);
+      }
+    }
     return false;
   }
   return false;

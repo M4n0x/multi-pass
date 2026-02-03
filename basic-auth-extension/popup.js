@@ -165,6 +165,8 @@ function applyActiveRuleIndicators() {
 async function updateRule(ruleId, patch) {
   rules = rules.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule));
   await saveRules(rules);
+  // Clear auth_failed state for this rule so extension will retry
+  chrome.runtime.sendMessage({ type: "clearAuthFailed", ruleId });
   renderRules();
   if (currentTab?.id && currentTab?.url) {
     chrome.runtime.sendMessage({
