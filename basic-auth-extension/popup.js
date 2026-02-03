@@ -143,15 +143,21 @@ function applyActiveRuleIndicators() {
     const isActive = activeRuleId && card.dataset.ruleId === activeRuleId;
     const isConflict =
       currentStatus === "conflict" && conflictRuleIds.includes(card.dataset.ruleId);
-    card.classList.toggle("is-active", Boolean(isActive));
+    const isError = currentStatus === "auth_failed" && isActive;
+    card.classList.toggle("is-active", Boolean(isActive) && !isError);
     card.classList.toggle("is-conflict", Boolean(isConflict));
+    card.classList.toggle("is-error", Boolean(isError));
     const badge = card.querySelector(".active-badge");
     if (badge) {
-      badge.hidden = !isActive;
+      badge.hidden = !isActive || isError;
     }
     const conflictBadge = card.querySelector(".conflict-badge");
     if (conflictBadge) {
       conflictBadge.hidden = !isConflict;
+    }
+    const errorBadge = card.querySelector(".error-badge");
+    if (errorBadge) {
+      errorBadge.hidden = !isError;
     }
   }
 }
@@ -275,11 +281,15 @@ function createRuleCard(rule) {
   conflictBadge.className = "conflict-badge";
   conflictBadge.textContent = "Conflict";
   conflictBadge.hidden = true;
+  const errorBadge = document.createElement("span");
+  errorBadge.className = "error-badge";
+  errorBadge.textContent = "Error";
+  errorBadge.hidden = true;
   const syncBadge = document.createElement("span");
   syncBadge.className = "sync-badge";
   syncBadge.textContent = "Sync";
   syncBadge.hidden = !isSynced;
-  hostLine.append(hostText, dirtyIndicator, activeBadge, conflictBadge, syncBadge);
+  hostLine.append(hostText, dirtyIndicator, activeBadge, conflictBadge, errorBadge, syncBadge);
 
   const userSpan = document.createElement("span");
   userSpan.className = "summary-user";
@@ -507,10 +517,13 @@ function createRuleCard(rule) {
 
   updateSummary();
   const isActive = rule.id === activeRuleId;
-  card.classList.toggle("is-active", isActive);
-  activeBadge.hidden = !isActive;
+  const isError = currentStatus === "auth_failed" && isActive;
   const isConflict = currentStatus === "conflict" && conflictRuleIds.includes(rule.id);
+  card.classList.toggle("is-active", isActive && !isError);
+  card.classList.toggle("is-error", isError);
   card.classList.toggle("is-conflict", isConflict);
+  activeBadge.hidden = !isActive || isError;
+  errorBadge.hidden = !isError;
   conflictBadge.hidden = !isConflict;
   return card;
 }

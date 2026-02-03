@@ -9,8 +9,9 @@ function setBadge(tabId, state) {
     return;
   }
   const config = BADGE_CONFIG[state] || BADGE_CONFIG.idle;
-  chrome.action.setBadgeText({ tabId, text: config.text });
   chrome.action.setBadgeBackgroundColor({ tabId, color: config.color });
+  chrome.action.setBadgeTextColor({ tabId, color: "#FFFFFF" });
+  chrome.action.setBadgeText({ tabId, text: config.text });
 }
 
 function notifyTabStatus(tabId) {
@@ -271,6 +272,11 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
   if (changeInfo.status === "complete" && tab?.url) {
     updateTabStatusForUrl(tabId, tab.url);
+    // Re-apply badge after page load completes (Chrome can clear it)
+    const current = tabStatus.get(tabId);
+    if (current) {
+      setBadge(tabId, current.state);
+    }
   }
 });
 
