@@ -79,6 +79,10 @@ p {
   gap: 20px;
 }
 
+.tab-panel[hidden] {
+  display: none !important;
+}
+
 .vault-notice {
   border: 1px solid #c7d2fe;
   background: #eef2ff;

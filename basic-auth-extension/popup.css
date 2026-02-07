@@ -418,6 +418,10 @@ button.secondary {
   margin-bottom: 12px;
 }
 
+.vault-panel[hidden] {
+  display: none !important;
+}
+
 .vault-title {
   font-size: 13px;
   font-weight: 600;
