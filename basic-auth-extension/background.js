@@ -919,6 +919,23 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
+async function maybeLockVaultOnLastWindowClose() {
+  await ensureInitialized();
+  if (!vaultSettings.lockOnBrowserClose || !isVaultEnabled() || !vaultUnlocked) {
+    return;
+  }
+  const windows = await chrome.windows.getAll({});
+  if (windows.length === 0) {
+    await lockVault({ clearSession: true });
+  }
+}
+
+chrome.windows.onRemoved.addListener(() => {
+  maybeLockVaultOnLastWindowClose().catch(() => {
+    return;
+  });
+});
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") {
     return;
