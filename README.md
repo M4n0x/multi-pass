@@ -38,5 +38,25 @@ node scripts/build.js
 
 Artifacts are written to `dist/` and zipped per target.
 
+## Automated screenshots (README + store assets)
+Generate fresh screenshots for README and store submissions:
+
+```bash
+npm install
+npx playwright install chromium
+npm run screenshots
+```
+
+Outputs:
+- README images: `docs/images/page.png`, `docs/images/popup.png`
+- Raw captures: `docs/store-assets/raw/`
+- Chrome Web Store assets: `docs/store-assets/chrome/`
+- Firefox Developer Hub assets: `docs/store-assets/firefox/`
+
+Optional flags:
+- `--headless` (for CI/Xvfb environments)
+- `--skip-build` (if `dist/chromium` is already prepared)
+- `--extension-dir <path>` (use a custom unpacked extension build)
+
 ## Versioning
 Semantic commits are used to automatically bump the version on `main` and publish a GitHub release.

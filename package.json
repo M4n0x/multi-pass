@@ -1,0 +1,13 @@
+{
+  "name": "multi-pass",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "validate": "node scripts/validate.js",
+    "screenshots": "node scripts/capture-screenshots.js"
+  },
+  "devDependencies": {
+    "playwright": "^1.54.2",
+    "sharp": "^0.34.3"
+  }
+}
