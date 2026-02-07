@@ -396,6 +396,14 @@ input[type="file"] {
   flex: 1;
 }
 
+.security-webauthn {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #dbe1e8;
+  display: grid;
+  gap: 10px;
+}
+
 .security-actions-row {
   margin-top: 14px;
   padding-top: 12px;

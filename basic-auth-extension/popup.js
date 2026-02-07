@@ -1,13 +1,17 @@
 import { STATUS_LABELS } from "./shared/constants.js";
 import {
+  beginVaultWebAuthnUnlock,
+  completeVaultWebAuthnUnlock,
   generateId,
   getRules,
   getVaultState,
+  getVaultWebAuthnState,
   isValidRegex,
   isVaultLockedError,
   saveRules,
   unlockVault
 } from "./shared/storage.js";
+import { detectWebAuthnSupport, runWebAuthnUnlock } from "./shared/webauthn.js";
 
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
@@ -23,6 +27,8 @@ const vaultLocked = document.getElementById("vault-locked");
 const vaultResult = document.getElementById("vault-result");
 const vaultUnlockPassword = document.getElementById("vault-unlock-password");
 const vaultUnlockButton = document.getElementById("vault-unlock-btn");
+const vaultWebAuthnButton = document.getElementById("vault-webauthn-btn");
+const vaultWebAuthnNote = document.getElementById("vault-webauthn-note");
 const actionsSection = document.getElementById("actions-section");
 const rulesSection = document.getElementById("rules-section");
 
@@ -47,6 +53,13 @@ let vaultState = {
   enabled: false,
   unlocked: true
 };
+let vaultWebAuthnState = {
+  supported: false,
+  available: false,
+  configured: false,
+  platformAuthenticator: false
+};
+let vaultWebAuthnBusy = false;
 
 function queryTabs(queryInfo) {
   return new Promise((resolve) => {
@@ -102,6 +115,30 @@ function mapVaultError(code) {
   }
 }
 
+function mapWebAuthnError(code) {
+  switch (code) {
+    case "webauthn-not-configured":
+      return "Biometric unlock is not configured.";
+    case "webauthn-unavailable":
+      return "Biometric unlock is unavailable in this browser.";
+    case "webauthn-prf-unavailable":
+      return "Your authenticator does not support secure biometric unlock for this vault.";
+    case "webauthn-cancelled":
+      return "Biometric unlock was cancelled.";
+    case "webauthn-session-expired":
+      return "Biometric request expired. Try again.";
+    case "webauthn-invalid-response":
+      return "Biometric response was invalid. Try again.";
+    case "webauthn-security-error":
+      return "Biometric security validation failed.";
+    case "webauthn-setup-failed":
+    case "webauthn-unlock-failed":
+      return "Biometric unlock failed. Use password and try again.";
+    default:
+      return "Biometric unlock failed. Use password and try again.";
+  }
+}
+
 function showVaultResult(message, isError = false) {
   if (!vaultResult) {
     return;
@@ -121,6 +158,42 @@ function clearVaultResult() {
   vaultResult.textContent = "";
 }
 
+function setVaultWebAuthnUi(isVisible, note = "") {
+  if (vaultWebAuthnButton) {
+    vaultWebAuthnButton.hidden = !isVisible;
+    vaultWebAuthnButton.disabled = !isVisible || vaultWebAuthnBusy;
+  }
+  if (vaultWebAuthnNote) {
+    vaultWebAuthnNote.hidden = !note;
+    vaultWebAuthnNote.textContent = note || "";
+  }
+}
+
+function resolveVaultWebAuthnNote() {
+  if (!vaultState.supported || !vaultState.enabled || vaultState.unlocked) {
+    return { visible: false, note: "" };
+  }
+  if (!vaultWebAuthnState.supported) {
+    return {
+      visible: false,
+      note: "Biometric unlock is not available in this browser."
+    };
+  }
+  if (!vaultWebAuthnState.platformAuthenticator) {
+    return {
+      visible: false,
+      note: "No platform authenticator detected on this device."
+    };
+  }
+  if (!vaultWebAuthnState.configured) {
+    return {
+      visible: false,
+      note: "Set up biometric unlock in Settings → Security."
+    };
+  }
+  return { visible: true, note: "" };
+}
+
 function setLockedUi(isLocked) {
   addRuleButton.disabled = isLocked;
   actionsSection.hidden = isLocked;
@@ -129,16 +202,31 @@ function setLockedUi(isLocked) {
   vaultLocked.hidden = !isLocked;
 
   if (isLocked) {
+    const { visible, note } = resolveVaultWebAuthnNote();
+    setVaultWebAuthnUi(visible, note);
     updateStatus("locked");
     rules = [];
     renderRules();
   } else {
+    setVaultWebAuthnUi(false, "");
     emptyState.textContent = "No rules yet.";
   }
 }
 
 async function refreshVaultUi() {
-  vaultState = await getVaultState();
+  const [nextVaultState, nextVaultWebAuthnState, supportInfo] = await Promise.all([
+    getVaultState(),
+    getVaultWebAuthnState(),
+    detectWebAuthnSupport().catch(() => ({ supported: false, platformAuthenticator: false }))
+  ]);
+
+  vaultState = nextVaultState;
+  vaultWebAuthnState = {
+    supported: Boolean(nextVaultWebAuthnState.supported && supportInfo.supported),
+    available: Boolean(nextVaultWebAuthnState.available),
+    configured: Boolean(nextVaultWebAuthnState.configured),
+    platformAuthenticator: Boolean(supportInfo.platformAuthenticator)
+  };
 
   if (!vaultState.supported || !vaultState.enabled) {
     setLockedUi(false);
@@ -783,7 +871,52 @@ async function handleVaultUnlock() {
   await refreshStatus();
 }
 
+async function handleVaultWebAuthnUnlock() {
+  if (vaultWebAuthnBusy) {
+    return;
+  }
+  clearVaultResult();
+  vaultWebAuthnBusy = true;
+  setVaultWebAuthnUi(vaultWebAuthnButton ? !vaultWebAuthnButton.hidden : false, "");
 
+  try {
+    const begin = await beginVaultWebAuthnUnlock();
+    if (!begin?.ok) {
+      showVaultResult(mapWebAuthnError(begin?.error), true);
+      return;
+    }
+    if (begin.alreadyUnlocked) {
+      showVaultResult("Vault already unlocked.");
+      await refreshVaultUi();
+      await loadRules();
+      await refreshStatus();
+      return;
+    }
+
+    const credential = await runWebAuthnUnlock(begin.options || {});
+    const complete = await completeVaultWebAuthnUnlock(credential);
+    if (!complete?.ok) {
+      showVaultResult(mapWebAuthnError(complete?.error), true);
+      return;
+    }
+
+    if (vaultUnlockPassword) {
+      vaultUnlockPassword.value = "";
+    }
+    showVaultResult("Vault unlocked with biometrics.");
+    await refreshVaultUi();
+    await loadRules();
+    await refreshStatus();
+  } catch (error) {
+    showVaultResult(mapWebAuthnError(error?.code), true);
+  } finally {
+    vaultWebAuthnBusy = false;
+    if (vaultState.supported && vaultState.enabled && !vaultState.unlocked) {
+      const { visible, note } = resolveVaultWebAuthnNote();
+      setVaultWebAuthnUi(visible, note);
+    }
+  }
+}
 
 
 async function init() {
@@ -804,6 +937,9 @@ openOptionsButton.addEventListener("click", () => chrome.runtime.openOptionsPage
 
 if (vaultUnlockButton) {
   vaultUnlockButton.addEventListener("click", handleVaultUnlock);
+}
+if (vaultWebAuthnButton) {
+  vaultWebAuthnButton.addEventListener("click", handleVaultWebAuthnUnlock);
 }
 if (vaultUnlockPassword) {
   vaultUnlockPassword.addEventListener("keydown", (event) => {
