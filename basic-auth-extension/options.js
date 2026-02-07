@@ -1,10 +1,19 @@
 import {
+  changeVaultPassword,
+  disableVault,
+  enableVault,
   generateId,
   getRules,
   getSyncSources,
+  getVaultSettings,
+  getVaultState,
   isValidRegex,
+  isVaultLockedError,
+  lockVault,
   saveRules,
-  saveSyncSources
+  saveSyncSources,
+  setVaultLockOnClose,
+  unlockVault
 } from "./shared/storage.js";
 
 const exportButton = document.getElementById("export-btn");
@@ -25,6 +34,36 @@ const syncList = document.getElementById("sync-list");
 const syncEmpty = document.getElementById("sync-empty");
 const syncWhyButton = document.getElementById("sync-warning-why");
 const syncPopover = document.getElementById("sync-warning-popover");
+const vaultNotice = document.getElementById("vault-notice");
+
+const tabImportButton = document.getElementById("tab-import-btn");
+const tabSecurityButton = document.getElementById("tab-security-btn");
+const tabImportPanel = document.getElementById("tab-import");
+const tabSecurityPanel = document.getElementById("tab-security");
+
+const securitySetup = document.getElementById("security-setup");
+const securityLocked = document.getElementById("security-locked");
+const securityOpen = document.getElementById("security-open");
+const securityOpenActions = document.getElementById("security-open-actions");
+const securityResult = document.getElementById("security-result");
+
+const securitySetupPassword = document.getElementById("security-setup-password");
+const securitySetupConfirm = document.getElementById("security-setup-confirm");
+const securityEnableButton = document.getElementById("security-enable-btn");
+
+const securityUnlockPassword = document.getElementById("security-unlock-password");
+const securityUnlockButton = document.getElementById("security-unlock-btn");
+
+const securityLockButton = document.getElementById("security-lock-btn");
+const securityDisableButton = document.getElementById("security-disable-btn");
+
+const securityCurrentPassword = document.getElementById("security-current-password");
+const securityNextPassword = document.getElementById("security-next-password");
+const securityNextConfirm = document.getElementById("security-next-confirm");
+const securityChangeButton = document.getElementById("security-change-btn");
+const securityLockOnCloseToggle = document.getElementById("security-lock-on-close");
+
+let optionsLocked = false;
 
 function showImportResult(message, isError = false) {
   importResult.hidden = false;
@@ -48,6 +87,64 @@ function showSyncResult(message, isError = false) {
   syncResult.style.borderColor = isError ? "#fca5a5" : "#cbd2d9";
   syncResult.style.background = isError ? "#fff5f5" : "#f8fafc";
   syncResult.style.color = isError ? "#b91c1c" : "#1f2933";
+}
+
+function showSecurityResult(message, isError = false) {
+  if (!securityResult) {
+    return;
+  }
+  securityResult.hidden = false;
+  securityResult.textContent = message;
+  securityResult.style.borderColor = isError ? "#fca5a5" : "#cbd2d9";
+  securityResult.style.background = isError ? "#fff5f5" : "#f8fafc";
+  securityResult.style.color = isError ? "#b91c1c" : "#1f2933";
+}
+
+function clearSecurityResult() {
+  if (!securityResult) {
+    return;
+  }
+  securityResult.hidden = true;
+  securityResult.textContent = "";
+}
+
+function mapVaultError(code) {
+  switch (code) {
+    case "weak-password":
+      return "Use a stronger password (minimum 8 characters).";
+    case "already-enabled":
+      return "Vault lock is already enabled.";
+    case "invalid-password":
+      return "Invalid password.";
+    case "locked":
+      return "Unlock the vault first.";
+    case "not-enabled":
+      return "Vault lock is not enabled.";
+    default:
+      return "Security action failed.";
+  }
+}
+
+function setActiveTab(tab) {
+  const securityAvailable = !(tabSecurityButton && tabSecurityButton.hidden);
+  const importActive = tab !== "security" || !securityAvailable;
+  tabImportButton?.classList.toggle("active", importActive);
+  tabSecurityButton?.classList.toggle("active", !importActive && securityAvailable);
+  if (tabImportPanel) {
+    tabImportPanel.hidden = !importActive;
+  }
+  if (tabSecurityPanel) {
+    tabSecurityPanel.hidden = importActive || !securityAvailable;
+  }
+}
+
+function setSecurityTabVisibility(visible) {
+  if (tabSecurityButton) {
+    tabSecurityButton.hidden = !visible;
+  }
+  if (!visible) {
+    setActiveTab("import");
+  }
 }
 
 function closeSyncPopover() {
@@ -87,6 +184,101 @@ if (syncWhyButton && syncPopover) {
       closeSyncPopover();
     }
   });
+}
+
+function setControlsDisabled(disabled) {
+  const controls = [
+    exportButton,
+    importButton,
+    importPasteButton,
+    syncAddButton,
+    importFile,
+    importText,
+    syncLabelInput,
+    syncUrlInput
+  ];
+  for (const control of controls) {
+    if (!control) {
+      continue;
+    }
+    control.disabled = disabled;
+  }
+}
+
+function setLockedMode(locked) {
+  optionsLocked = locked;
+  setControlsDisabled(locked);
+  if (vaultNotice) {
+    vaultNotice.hidden = !locked;
+  }
+  if (locked) {
+    summary.textContent = "Rules: locked";
+    renderRulesList([]);
+  }
+}
+
+async function refreshLockState() {
+  const vault = await getVaultState();
+  const locked = Boolean(vault.supported && vault.enabled && !vault.unlocked);
+  setLockedMode(locked);
+  return locked;
+}
+
+async function refreshSecurityState() {
+  const [vault, settings] = await Promise.all([getVaultState(), getVaultSettings()]);
+
+  if (securityLockOnCloseToggle) {
+    securityLockOnCloseToggle.checked = Boolean(settings.lockOnBrowserClose);
+    securityLockOnCloseToggle.disabled = !settings.supported;
+  }
+
+  if (securitySetup) {
+    securitySetup.hidden = true;
+  }
+  if (securityLocked) {
+    securityLocked.hidden = true;
+  }
+  if (securityOpen) {
+    securityOpen.hidden = true;
+  }
+  if (securityOpenActions) {
+    securityOpenActions.hidden = true;
+  }
+
+  if (!vault.supported) {
+    clearSecurityResult();
+    setSecurityTabVisibility(false);
+    return vault;
+  }
+
+  setSecurityTabVisibility(true);
+  clearSecurityResult();
+
+  if (!vault.enabled) {
+    if (securitySetup) {
+      securitySetup.hidden = false;
+    }
+    return vault;
+  }
+
+  if (!vault.unlocked) {
+    if (securityLocked) {
+      securityLocked.hidden = false;
+    }
+    return vault;
+  }
+
+  if (securityOpen) {
+    securityOpen.hidden = false;
+  }
+  if (securityOpenActions) {
+    securityOpenActions.hidden = false;
+  }
+  return vault;
+}
+
+function isLockedError(error) {
+  return isVaultLockedError(error);
 }
 
 function isValidHttpsUrl(urlString) {
@@ -354,10 +546,12 @@ function renderSyncSources(sources, rules) {
     const resyncButton = document.createElement("button");
     resyncButton.type = "button";
     resyncButton.textContent = "Re-sync";
+    resyncButton.disabled = optionsLocked;
     resyncButton.addEventListener("click", () => resyncSource(source.id));
     const removeButton = document.createElement("button");
     removeButton.type = "button";
     removeButton.textContent = "Remove";
+    removeButton.disabled = optionsLocked;
     removeButton.addEventListener("click", () => removeSyncSource(source.id));
     actions.append(resyncButton, removeButton);
 
@@ -367,23 +561,53 @@ function renderSyncSources(sources, rules) {
 }
 
 async function refreshView() {
-  const [rules, syncSources] = await Promise.all([getRules(), getSyncSources()]);
-  summary.textContent = `Rules: ${rules.length}`;
-  renderRulesList(rules);
-  renderSyncSources(syncSources, rules);
+  const locked = await refreshLockState();
+  const syncSources = await getSyncSources();
+
+  if (locked) {
+    renderSyncSources(syncSources, []);
+    return;
+  }
+
+  try {
+    const rules = await getRules();
+    summary.textContent = `Rules: ${rules.length}`;
+    renderRulesList(rules);
+    renderSyncSources(syncSources, rules);
+  } catch (error) {
+    if (isLockedError(error)) {
+      setLockedMode(true);
+      renderSyncSources(syncSources, []);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function handleExport() {
-  const rules = (await getRules()).filter((rule) => !rule.syncSourceId);
-  const payload = JSON.stringify({ rules }, null, 2);
-  const blob = new Blob([payload], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "basic-auth-rules.json";
-  link.click();
-  URL.revokeObjectURL(url);
-  showExportResult("Exported rules successfully.");
+  if (optionsLocked) {
+    showExportResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
+  try {
+    const rules = (await getRules()).filter((rule) => !rule.syncSourceId);
+    const payload = JSON.stringify({ rules }, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "basic-auth-rules.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    showExportResult("Exported rules successfully.");
+  } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showExportResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
+    showExportResult("Export failed.", true);
+  }
 }
 
 async function applyIncomingRules(incoming) {
@@ -418,6 +642,10 @@ async function applyIncomingRules(incoming) {
 }
 
 async function handleFileImport() {
+  if (optionsLocked) {
+    showImportResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   const file = importFile.files?.[0];
   if (!file) {
     showImportResult("Select a JSON or text file to import.", true);
@@ -429,6 +657,11 @@ async function handleFileImport() {
     const incoming = parseIncomingRules(parsed);
     await applyIncomingRules(incoming);
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showImportResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showImportResult("Import failed. Ensure the file is valid JSON.", true);
   } finally {
     importFile.value = "";
@@ -436,6 +669,10 @@ async function handleFileImport() {
 }
 
 async function handlePasteImport() {
+  if (optionsLocked) {
+    showImportResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   const text = importText.value.trim();
   if (!text) {
     showImportResult("Paste JSON to import.", true);
@@ -447,6 +684,11 @@ async function handlePasteImport() {
     await applyIncomingRules(incoming);
     importText.value = "";
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showImportResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showImportResult("Import failed. Ensure the pasted JSON is valid.", true);
   }
 }
@@ -484,6 +726,10 @@ async function fetchRulesFromUrl(url) {
 }
 
 async function addSyncSource() {
+  if (optionsLocked) {
+    showSyncResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   const url = syncUrlInput.value.trim();
   const label = syncLabelInput.value.trim();
   if (!isValidHttpsUrl(url)) {
@@ -513,11 +759,20 @@ async function addSyncSource() {
     syncLabelInput.value = "";
     showSyncResult(`Synced ${syncedRules.length} rules from ${newSource.name}.`);
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showSyncResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showSyncResult(error?.message || "Sync failed. Check the URL and JSON format.", true);
   }
 }
 
 async function resyncSource(sourceId) {
+  if (optionsLocked) {
+    showSyncResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   try {
     const [sources, existingRules] = await Promise.all([getSyncSources(), getRules()]);
     const source = sources.find((item) => item.id === sourceId);
@@ -536,18 +791,150 @@ async function resyncSource(sourceId) {
     await refreshView();
     showSyncResult(`Re-synced ${syncedRules.length} rules from ${getSourceLabel(source)}.`);
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showSyncResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showSyncResult(error?.message || "Re-sync failed. Check the URL and JSON format.", true);
   }
 }
 
 async function removeSyncSource(sourceId) {
-  const [sources, rules] = await Promise.all([getSyncSources(), getRules()]);
-  const nextSources = sources.filter((source) => source.id !== sourceId);
-  const nextRules = rules.filter((rule) => rule.syncSourceId !== sourceId);
-  await saveSyncSources(nextSources);
-  await saveRules(nextRules);
+  if (optionsLocked) {
+    showSyncResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
+  try {
+    const [sources, rules] = await Promise.all([getSyncSources(), getRules()]);
+    const nextSources = sources.filter((source) => source.id !== sourceId);
+    const nextRules = rules.filter((rule) => rule.syncSourceId !== sourceId);
+    await saveSyncSources(nextSources);
+    await saveRules(nextRules);
+    await refreshView();
+    showSyncResult("Sync source removed.");
+  } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showSyncResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
+    showSyncResult("Failed to remove sync source.", true);
+  }
+}
+
+async function handleSecurityEnable() {
+  clearSecurityResult();
+  const password = securitySetupPassword?.value || "";
+  const confirm = securitySetupConfirm?.value || "";
+
+  if (password.length < 8) {
+    showSecurityResult("Password must be at least 8 characters.", true);
+    return;
+  }
+  if (password !== confirm) {
+    showSecurityResult("Passwords do not match.", true);
+    return;
+  }
+
+  const result = await enableVault(password);
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+
+  if (securitySetupPassword) securitySetupPassword.value = "";
+  if (securitySetupConfirm) securitySetupConfirm.value = "";
+  showSecurityResult("Vault lock enabled.");
+  await refreshSecurityState();
   await refreshView();
-  showSyncResult("Sync source removed.");
+}
+
+async function handleSecurityUnlock() {
+  clearSecurityResult();
+  const password = securityUnlockPassword?.value || "";
+  const result = await unlockVault(password);
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+  if (securityUnlockPassword) securityUnlockPassword.value = "";
+  showSecurityResult("Vault unlocked.");
+  await refreshSecurityState();
+  await refreshView();
+}
+
+async function handleSecurityLock() {
+  clearSecurityResult();
+  const result = await lockVault();
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+  showSecurityResult("Vault locked.");
+  await refreshSecurityState();
+  await refreshView();
+}
+
+async function handleSecurityDisable() {
+  clearSecurityResult();
+  if (!window.confirm("Disable vault lock and store rules unencrypted?")) {
+    return;
+  }
+  const result = await disableVault();
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+  showSecurityResult("Vault lock disabled.");
+  await refreshSecurityState();
+  await refreshView();
+}
+
+async function handleSecurityChangePassword() {
+  clearSecurityResult();
+  const currentPassword = securityCurrentPassword?.value || "";
+  const nextPassword = securityNextPassword?.value || "";
+  const nextConfirm = securityNextConfirm?.value || "";
+
+  if (nextPassword.length < 8) {
+    showSecurityResult("New password must be at least 8 characters.", true);
+    return;
+  }
+  if (nextPassword !== nextConfirm) {
+    showSecurityResult("New passwords do not match.", true);
+    return;
+  }
+
+  const result = await changeVaultPassword(currentPassword, nextPassword);
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+
+  if (securityCurrentPassword) securityCurrentPassword.value = "";
+  if (securityNextPassword) securityNextPassword.value = "";
+  if (securityNextConfirm) securityNextConfirm.value = "";
+  showSecurityResult("Password updated.");
+}
+
+async function handleSecurityLockOnCloseToggle() {
+  if (!securityLockOnCloseToggle) {
+    return;
+  }
+  const value = Boolean(securityLockOnCloseToggle.checked);
+  const result = await setVaultLockOnClose(value);
+  if (!result.ok) {
+    showSecurityResult("Unable to update lock-on-close setting.", true);
+    securityLockOnCloseToggle.checked = !value;
+    return;
+  }
+  showSecurityResult(
+    value
+      ? "Plugin will lock when browser closes."
+      : "Plugin will stay unlocked across browser restarts.",
+    false
+  );
 }
 
 exportButton.addEventListener("click", handleExport);
@@ -555,11 +942,34 @@ importButton.addEventListener("click", handleFileImport);
 importPasteButton.addEventListener("click", handlePasteImport);
 syncAddButton.addEventListener("click", addSyncSource);
 
+tabImportButton?.addEventListener("click", () => setActiveTab("import"));
+tabSecurityButton?.addEventListener("click", async () => {
+  setActiveTab("security");
+  await refreshSecurityState();
+});
+
+securityEnableButton?.addEventListener("click", handleSecurityEnable);
+securityUnlockButton?.addEventListener("click", handleSecurityUnlock);
+securityLockButton?.addEventListener("click", handleSecurityLock);
+securityDisableButton?.addEventListener("click", handleSecurityDisable);
+securityChangeButton?.addEventListener("click", handleSecurityChangePassword);
+securityLockOnCloseToggle?.addEventListener("change", handleSecurityLockOnCloseToggle);
+
+securityUnlockPassword?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleSecurityUnlock();
+  }
+});
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || (!changes.rules && !changes.syncSources)) {
+  if (areaName !== "local" || (!changes.rules && !changes.syncSources && !changes.vaultPayload)) {
     return;
   }
+  refreshSecurityState();
   refreshView();
 });
 
+setActiveTab("import");
+refreshSecurityState();
 refreshView();

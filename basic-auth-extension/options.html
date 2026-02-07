@@ -4,81 +4,142 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link rel="stylesheet" href="options.css" />
-    <title>Basic Auth Settings</title>
+    <title>Multi-pass Settings</title>
   </head>
   <body>
     <main class="page">
       <header class="header">
         <div>
-          <h1>Import / Export</h1>
-          <p>Merge rule sets without losing existing entries.</p>
+          <h1>Settings</h1>
+          <p>Manage import/sync rules and security options.</p>
         </div>
         <div class="summary" id="summary">Rules: 0</div>
       </header>
 
-      <section class="panel">
-        <h2>Export</h2>
-        <p>Download all rules as JSON for backup or sharing.</p>
-        <button id="export-btn" type="button">Download JSON</button>
-        <div id="export-result" class="result" hidden></div>
-      </section>
+      <nav class="tabs" aria-label="Settings tabs">
+        <button id="tab-import-btn" class="tab-btn active" type="button">Import/Export</button>
+        <button id="tab-security-btn" class="tab-btn" type="button" hidden>Security</button>
+      </nav>
 
-      <section class="panel">
-        <h2>Import</h2>
-        <p>Merge rules from a JSON file or pasted JSON. Existing IDs are replaced.</p>
-        <div class="import-controls">
-          <input
-            id="import-file"
-            type="file"
-            accept="application/json,text/plain,.json,.txt"
-          />
-          <button id="import-btn" type="button">Import file</button>
+      <section id="tab-import" class="tab-panel">
+        <div id="vault-notice" class="vault-notice" hidden>
+          Vault is locked. Unlock it from the Security tab (or popup) to view/edit rules.
         </div>
-        <div class="import-paste">
-          <textarea id="import-text" placeholder="Paste JSON here"></textarea>
-          <button id="import-paste-btn" type="button">Import pasted JSON</button>
-        </div>
-        <div id="import-result" class="result" hidden></div>
-      </section>
 
-      <section class="panel">
-        <h2>Sync from URL</h2>
-        <p>Add a HTTPS link to a JSON snippet (GitLab snippet links are supported).</p>
-        <div class="sync-warning">
-          <span class="sync-warning-icon">⚠️</span>
-          <span>
-            Only add sources you trust. Synced rules can overwrite credentials.
-            <span class="sync-popover-wrap">
-              <button
-                id="sync-warning-why"
-                class="sync-popover-trigger"
-                type="button"
-                aria-expanded="false"
-                aria-controls="sync-warning-popover"
-              >
-                Why?
-              </button>
-              <div id="sync-warning-popover" class="sync-popover" role="dialog" hidden>
-                Remote sources can change without notice. Verify the JSON content and host before syncing.
-              </div>
+        <section class="panel">
+          <h2>Export</h2>
+          <p>Download all rules as JSON for backup or sharing.</p>
+          <button id="export-btn" type="button">Download JSON</button>
+          <div id="export-result" class="result" hidden></div>
+        </section>
+
+        <section class="panel">
+          <h2>Import</h2>
+          <p>Merge rules from a JSON file or pasted JSON. Existing IDs are replaced.</p>
+          <div class="import-controls">
+            <input
+              id="import-file"
+              type="file"
+              accept="application/json,text/plain,.json,.txt"
+            />
+            <button id="import-btn" type="button">Import file</button>
+          </div>
+          <div class="import-paste">
+            <textarea id="import-text" placeholder="Paste JSON here"></textarea>
+            <button id="import-paste-btn" type="button">Import pasted JSON</button>
+          </div>
+          <div id="import-result" class="result" hidden></div>
+        </section>
+
+        <section class="panel">
+          <h2>Sync from URL</h2>
+          <p>Add a HTTPS link to a JSON snippet (GitLab snippet links are supported).</p>
+          <div class="sync-warning">
+            <span class="sync-warning-icon">⚠️</span>
+            <span>
+              Only add sources you trust. Synced rules can overwrite credentials.
+              <span class="sync-popover-wrap">
+                <button
+                  id="sync-warning-why"
+                  class="sync-popover-trigger"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="sync-warning-popover"
+                >
+                  Why?
+                </button>
+                <div id="sync-warning-popover" class="sync-popover" role="dialog" hidden>
+                  Remote sources can change without notice. Verify the JSON content and host before syncing.
+                </div>
+              </span>
             </span>
-          </span>
-        </div>
-        <div class="sync-controls">
-          <input id="sync-label" type="text" placeholder="Label (optional)" />
-          <input id="sync-url" type="url" placeholder="https://..." />
-          <button id="sync-add" type="button">Add source</button>
-        </div>
-        <div id="sync-result" class="result" hidden></div>
-        <div id="sync-list" class="sync-list"></div>
-        <div id="sync-empty" class="empty-state" hidden>No sync sources yet.</div>
+          </div>
+          <div class="sync-controls">
+            <input id="sync-label" type="text" placeholder="Label (optional)" />
+            <input id="sync-url" type="url" placeholder="https://..." />
+            <button id="sync-add" type="button">Add source</button>
+          </div>
+          <div id="sync-result" class="result" hidden></div>
+          <div id="sync-list" class="sync-list"></div>
+          <div id="sync-empty" class="empty-state" hidden>No sync sources yet.</div>
+        </section>
+
+        <section class="panel">
+          <h2>Rules</h2>
+          <p>Ordered by priority from top to bottom.</p>
+          <div id="rules-list" class="rules-list"></div>
+          <div id="rules-empty" class="empty-state" hidden>No rules yet.</div>
+        </section>
       </section>
 
-      <section class="panel">
-        <h2>Rules</h2>
-        <p>Ordered by priority from top to bottom.</p>
-        <div id="rules-list" class="rules-list"></div>
-        <div id="rules-empty" class="empty-state" hidden>No rules yet.</div>
+      <section id="tab-security" class="tab-panel" hidden>
+        <section class="panel security-panel">
+          <div class="security-header">
+            <div>
+              <h2>Vault lock</h2>
+              <p>Protect local credentials with a master password.</p>
+            </div>
+          </div>
+
+          <label class="security-toggle">
+            <input id="security-lock-on-close" type="checkbox" checked />
+            <span>Lock plugin when closing browser</span>
+          </label>
+
+          <div id="security-setup" hidden>
+            <div class="security-grid">
+              <input id="security-setup-password" type="password" placeholder="Master password (min. 8 chars)" />
+              <input id="security-setup-confirm" type="password" placeholder="Confirm password" />
+              <button id="security-enable-btn" type="button">Enable lock</button>
+            </div>
+          </div>
+
+          <div id="security-locked" hidden>
+            <p class="security-note">Vault is locked.</p>
+            <div class="security-inline">
+              <input id="security-unlock-password" type="password" placeholder="Master password" />
+              <button id="security-unlock-btn" type="button">Unlock</button>
+            </div>
+          </div>
+
+          <div id="security-open" hidden>
+            <p class="security-note">Vault is unlocked for this browser session.</p>
+            <div class="security-grid">
+              <input id="security-current-password" type="password" placeholder="Current password" />
+              <input id="security-next-password" type="password" placeholder="New password" />
+              <input id="security-next-confirm" type="password" placeholder="Confirm new password" />
+              <button id="security-change-btn" type="button">Change password</button>
+            </div>
+            <div id="security-open-actions" class="security-actions-row" hidden>
+              <div class="security-actions">
+                <button id="security-lock-btn" type="button" class="secondary">Lock now</button>
+                <button id="security-disable-btn" type="button" class="danger">Disable lock</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="security-result" class="result" hidden></div>
+        </section>
       </section>
     </main>
 

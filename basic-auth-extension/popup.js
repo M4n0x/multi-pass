@@ -1,5 +1,13 @@
 import { STATUS_LABELS } from "./shared/constants.js";
-import { generateId, getRules, isValidRegex, saveRules } from "./shared/storage.js";
+import {
+  generateId,
+  getRules,
+  getVaultState,
+  isValidRegex,
+  isVaultLockedError,
+  saveRules,
+  unlockVault
+} from "./shared/storage.js";
 
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
@@ -10,11 +18,20 @@ const ruleCount = document.getElementById("rule-count");
 const addRuleButton = document.getElementById("add-rule");
 const openOptionsButton = document.getElementById("open-options");
 
+const vaultPanel = document.getElementById("vault-panel");
+const vaultLocked = document.getElementById("vault-locked");
+const vaultResult = document.getElementById("vault-result");
+const vaultUnlockPassword = document.getElementById("vault-unlock-password");
+const vaultUnlockButton = document.getElementById("vault-unlock-btn");
+const actionsSection = document.getElementById("actions-section");
+const rulesSection = document.getElementById("rules-section");
+
 const STATUS_CLASSES = {
   idle: "status-idle",
   ok: "status-ok",
   auth_failed: "status-failed",
-  conflict: "status-conflict"
+  conflict: "status-conflict",
+  locked: "status-locked"
 };
 
 let currentTab = null;
@@ -25,6 +42,11 @@ let currentStatus = "idle";
 let conflictRuleIds = [];
 const expandedRuleIds = new Set();
 let sortableInstance = null;
+let vaultState = {
+  supported: false,
+  enabled: false,
+  unlocked: true
+};
 
 function queryTabs(queryInfo) {
   return new Promise((resolve) => {
@@ -63,7 +85,84 @@ function updateStatus(state) {
   statusDot.className = `status-dot ${STATUS_CLASSES[safeState] || "status-idle"}`;
 }
 
+function mapVaultError(code) {
+  switch (code) {
+    case "weak-password":
+      return "Use a stronger password (minimum 8 characters).";
+    case "already-enabled":
+      return "Vault lock is already enabled.";
+    case "invalid-password":
+      return "Invalid password.";
+    case "locked":
+      return "Unlock the vault first.";
+    case "not-enabled":
+      return "Vault lock is not enabled.";
+    default:
+      return "Security action failed.";
+  }
+}
+
+function showVaultResult(message, isError = false) {
+  if (!vaultResult) {
+    return;
+  }
+  vaultResult.hidden = false;
+  vaultResult.textContent = message;
+  vaultResult.style.borderColor = isError ? "#fca5a5" : "#cbd2d9";
+  vaultResult.style.background = isError ? "#fff5f5" : "#f8fafc";
+  vaultResult.style.color = isError ? "#b91c1c" : "#1f2933";
+}
+
+function clearVaultResult() {
+  if (!vaultResult) {
+    return;
+  }
+  vaultResult.hidden = true;
+  vaultResult.textContent = "";
+}
+
+function setLockedUi(isLocked) {
+  addRuleButton.disabled = isLocked;
+  actionsSection.hidden = isLocked;
+  rulesSection.hidden = isLocked;
+  vaultPanel.hidden = !isLocked;
+  vaultLocked.hidden = !isLocked;
+
+  if (isLocked) {
+    updateStatus("locked");
+    rules = [];
+    renderRules();
+  } else {
+    emptyState.textContent = "No rules yet.";
+  }
+}
+
+async function refreshVaultUi() {
+  vaultState = await getVaultState();
+
+  if (!vaultState.supported || !vaultState.enabled) {
+    setLockedUi(false);
+    return;
+  }
+
+  if (!vaultState.unlocked) {
+    setLockedUi(true);
+    return;
+  }
+
+  setLockedUi(false);
+}
+
 async function refreshStatus() {
+  if (vaultState.supported && vaultState.enabled && !vaultState.unlocked) {
+    updateStatus("locked");
+    activeRuleId = null;
+    conflictRuleIds = [];
+    currentStatus = "locked";
+    applyActiveRuleIndicators();
+    return;
+  }
+
   if (!currentTab?.id) {
     updateStatus("idle");
     activeRuleId = null;
@@ -162,10 +261,27 @@ function applyActiveRuleIndicators() {
   }
 }
 
+async function persistRules(nextRules) {
+  try {
+    await saveRules(nextRules);
+    return true;
+  } catch (error) {
+    if (isVaultLockedError(error)) {
+      await refreshVaultUi();
+      showVaultResult("Vault locked. Unlock to continue.", true);
+      return false;
+    }
+    showVaultResult("Failed to save rules.", true);
+    return false;
+  }
+}
+
 async function updateRule(ruleId, patch) {
   rules = rules.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule));
-  await saveRules(rules);
-  // Clear auth_failed state for this rule so extension will retry
+  const saved = await persistRules(rules);
+  if (!saved) {
+    return;
+  }
   chrome.runtime.sendMessage({ type: "clearAuthFailed", ruleId });
   renderRules();
   if (currentTab?.id && currentTab?.url) {
@@ -180,7 +296,10 @@ async function updateRule(ruleId, patch) {
 async function removeRule(ruleId) {
   rules = rules.filter((rule) => rule.id !== ruleId);
   expandedRuleIds.delete(ruleId);
-  await saveRules(rules);
+  const saved = await persistRules(rules);
+  if (!saved) {
+    return;
+  }
   renderRules();
   if (currentTab?.id && currentTab?.url) {
     chrome.runtime.sendMessage({
@@ -449,7 +568,10 @@ function createRuleCard(rule) {
     const enabled = enabledInput.checked;
     baseValues.enabled = enabled;
     rules = rules.map((item) => (item.id === rule.id ? { ...item, enabled } : item));
-    await saveRules(rules);
+    const saved = await persistRules(rules);
+    if (!saved) {
+      return;
+    }
     updateSummary();
     updateDirtyState();
     if (currentTab?.id && currentTab?.url) {
@@ -555,6 +677,10 @@ function renderRules() {
 }
 
 async function addRule() {
+  if (vaultState.supported && vaultState.enabled && !vaultState.unlocked) {
+    showVaultResult("Unlock the vault before adding a rule.", true);
+    return;
+  }
   const url = currentTab?.url || "";
   const pattern = url ? buildDefaultPattern(url) : "";
   const hostLabel = (() => {
@@ -579,7 +705,10 @@ async function addRule() {
   rules = [newRule, ...rules];
   expandedRuleIds.add(newRule.id);
   pendingFocus = { id: newRule.id, selector: ".rule-username" };
-  await saveRules(rules);
+  const saved = await persistRules(rules);
+  if (!saved) {
+    return;
+  }
   renderRules();
   if (currentTab?.id) {
     chrome.runtime.sendMessage({
@@ -591,7 +720,16 @@ async function addRule() {
 }
 
 async function loadRules() {
-  rules = await getRules();
+  try {
+    rules = await getRules();
+  } catch (error) {
+    if (isVaultLockedError(error)) {
+      rules = [];
+      setLockedUi(true);
+      return;
+    }
+    rules = [];
+  }
   renderRules();
 }
 
@@ -614,7 +752,10 @@ function initSortable() {
         return;
       }
       rules = nextRules;
-      await saveRules(rules);
+      const saved = await persistRules(rules);
+      if (!saved) {
+        return;
+      }
       if (currentTab?.id && currentTab?.url) {
         chrome.runtime.sendMessage({
           type: "refreshTabStatus",
@@ -626,19 +767,52 @@ function initSortable() {
   });
 }
 
+
+async function handleVaultUnlock() {
+  clearVaultResult();
+  const password = vaultUnlockPassword.value;
+  const result = await unlockVault(password);
+  if (!result.ok) {
+    showVaultResult(mapVaultError(result.error), true);
+    return;
+  }
+  vaultUnlockPassword.value = "";
+  showVaultResult("Vault unlocked.");
+  await refreshVaultUi();
+  await loadRules();
+  await refreshStatus();
+}
+
+
+
+
 async function init() {
+  clearVaultResult();
   const tabs = await queryTabs({ active: true, currentWindow: true });
   currentTab = tabs[0] || null;
   if (versionLabel) {
     const manifest = chrome.runtime.getManifest();
     versionLabel.textContent = `v${manifest.version}`;
   }
+  await refreshVaultUi();
   await loadRules();
   await refreshStatus();
 }
 
 addRuleButton.addEventListener("click", addRule);
 openOptionsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+if (vaultUnlockButton) {
+  vaultUnlockButton.addEventListener("click", handleVaultUnlock);
+}
+if (vaultUnlockPassword) {
+  vaultUnlockPassword.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handleVaultUnlock();
+    }
+  });
+}
 
 chrome.runtime.onMessage.addListener((message) => {
   if (!message || message.type !== "tabStatusChanged") {

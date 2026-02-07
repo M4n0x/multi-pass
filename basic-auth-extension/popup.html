@@ -22,12 +22,24 @@
         </div>
       </header>
 
-      <section class="actions">
-        <button id="open-options" type="button" class="secondary">Import/Export</button>
+      <section id="vault-panel" class="vault-panel" hidden>
+        <div id="vault-locked" hidden>
+          <div class="vault-title">Vault locked</div>
+          <p class="vault-text">Enter your password to unlock credentials for this browser session.</p>
+          <div class="vault-inline">
+            <input id="vault-unlock-password" type="password" placeholder="Master password" />
+            <button id="vault-unlock-btn" type="button">Unlock</button>
+          </div>
+          <div id="vault-result" class="result" hidden></div>
+        </div>
+      </section>
+
+      <section class="actions" id="actions-section">
+        <button id="open-options" type="button" class="secondary">Settings</button>
         <button id="add-rule" type="button">Add rule</button>
       </section>
 
-      <section class="rules">
+      <section class="rules" id="rules-section">
         <div class="rules-header">
           <span>Rules</span>
           <span id="rule-count" class="count">0</span>
