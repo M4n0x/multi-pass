@@ -41,6 +41,10 @@ function deepMerge(base, override) {
   }
   const merged = { ...base };
   for (const [key, value] of Object.entries(override || {})) {
+    if (value === null) {
+      delete merged[key];
+      continue;
+    }
     if (isObject(value) && isObject(merged[key])) {
       merged[key] = deepMerge(merged[key], value);
     } else if (value !== undefined) {

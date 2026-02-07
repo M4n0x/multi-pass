@@ -1,10 +1,25 @@
 {
+  "permissions": [
+    "storage",
+    "tabs",
+    "webRequest",
+    "webRequestBlocking"
+  ],
+  "background": {
+    "service_worker": null,
+    "type": null,
+    "scripts": [
+      "background.js"
+    ]
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "multi-pass@stevereis.ch",
       "strict_min_version": "109.0",
       "data_collection_permissions": {
-        "required": ["none"],
+        "required": [
+          "none"
+        ],
         "optional": [],
         "has_previous_consent": false
       }
