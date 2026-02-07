@@ -411,6 +411,10 @@ async function handlePasteImport() {
 }
 
 async function fetchRulesFromUrl(url) {
+  if (!isValidHttpsUrl(url)) {
+    throw new Error("Only HTTPS URLs are allowed.");
+  }
+
   const candidates = uniqueUrls([url, ...buildSnippetCandidates(url)]);
   let lastError = null;
 
@@ -468,7 +472,7 @@ async function addSyncSource() {
     syncLabelInput.value = "";
     showSyncResult(`Synced ${syncedRules.length} rules from ${newSource.name}.`);
   } catch (error) {
-    showSyncResult("Sync failed. Check the URL and JSON format.", true);
+    showSyncResult(error?.message || "Sync failed. Check the URL and JSON format.", true);
   }
 }
 
@@ -491,7 +495,7 @@ async function resyncSource(sourceId) {
     await refreshView();
     showSyncResult(`Re-synced ${syncedRules.length} rules from ${getSourceLabel(source)}.`);
   } catch (error) {
-    showSyncResult("Re-sync failed. Check the URL and JSON format.", true);
+    showSyncResult(error?.message || "Re-sync failed. Check the URL and JSON format.", true);
   }
 }
 
