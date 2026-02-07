@@ -449,6 +449,15 @@ button.secondary {
   flex: 1;
 }
 
+#vault-locked {
+  display: grid;
+  gap: 8px;
+}
+
+#vault-locked .result {
+  margin-top: 4px;
+}
+
 .vault-panel input {
   width: 100%;
   border: 1px solid #d7dde3;
