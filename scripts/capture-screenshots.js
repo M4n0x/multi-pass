@@ -345,6 +345,13 @@ async function main() {
 }
 
 main().catch((error) => {
+  const text = String(error?.message || error || "");
+  if (text.includes("error while loading shared libraries")) {
+    console.error("Playwright browser dependencies are missing on this machine.");
+    console.error("Try:");
+    console.error("  npx playwright install --with-deps chromium");
+    console.error("or run on a workstation with Chrome/Chromium installed.");
+  }
   console.error(error);
   process.exit(1);
 });

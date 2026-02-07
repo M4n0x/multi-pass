@@ -43,7 +43,7 @@ Generate fresh screenshots for README and store submissions:
 
 ```bash
 npm install
-npx playwright install chromium
+npx playwright install --with-deps chromium
 npm run screenshots
 ```
 
