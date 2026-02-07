@@ -20,7 +20,7 @@ if (!playwright || !sharp) {
   console.error("Missing dependencies for screenshot automation.");
   console.error("Run: npm install");
   console.error("Then ensure Chromium is available for Playwright:");
-  console.error("  npx playwright install chromium");
+  console.error("  npx playwright install --with-deps chromium");
   process.exit(1);
 }
 
@@ -212,11 +212,19 @@ async function prepareLockedVault(page) {
   }
 }
 
-async function screenshotPopup(context, popupUrl, outPath) {
+async function screenshotPopup(context, popupUrl, outPath, options = {}) {
   const popup = await context.newPage();
   await popup.setViewportSize({ width: 1200, height: 900 });
   await popup.goto(popupUrl, { waitUntil: "domcontentloaded" });
-  await popup.waitForTimeout(300);
+  await popup.waitForTimeout(350);
+
+  if (options.expandFirstRule) {
+    const firstRule = popup.locator(".rule-card .rule-summary").first();
+    if ((await firstRule.count()) > 0) {
+      await firstRule.click();
+      await popup.waitForTimeout(220);
+    }
+  }
 
   const app = popup.locator(".app");
   const box = await app.boundingBox();
@@ -261,24 +269,26 @@ async function renderCover(inputPath, outputPath, width, height) {
     .toFile(outputPath);
 }
 
-async function buildAssets(rawOptions, rawSecurity, rawPopup) {
+async function buildAssets(rawOptions, rawSecurity, rawPopupRules) {
   await Promise.all([
     // README images
     renderCover(rawOptions, path.join(README_IMG_DIR, "page.png"), 1600, 980),
-    renderContain(rawPopup, path.join(README_IMG_DIR, "popup.png"), 1200, 800),
+    renderContain(rawPopupRules, path.join(README_IMG_DIR, "popup.png"), 1200, 800),
 
     // Chrome store assets
     renderCover(rawOptions, path.join(CHROME_DIR, "screenshot-1-overview.png"), 1280, 800),
-    renderContain(rawPopup, path.join(CHROME_DIR, "screenshot-2-popup.png"), 1280, 800),
+    renderContain(rawPopupRules, path.join(CHROME_DIR, "screenshot-2-popup.png"), 1280, 800),
+    renderContain(rawPopupRules, path.join(CHROME_DIR, "screenshot-2-popup-rules.png"), 1280, 800),
     renderCover(rawSecurity, path.join(CHROME_DIR, "screenshot-3-security.png"), 1280, 800),
     renderCover(rawOptions, path.join(CHROME_DIR, "small-promo-tile-440x280.png"), 440, 280),
-    renderCover(rawSecurity, path.join(CHROME_DIR, "marquee-promo-tile-1400x560.png"), 1400, 560),
+    renderCover(rawPopupRules, path.join(CHROME_DIR, "marquee-promo-tile-1400x560.png"), 1400, 560),
 
     // Firefox developer hub assets
     renderCover(rawOptions, path.join(FIREFOX_DIR, "screenshot-1-overview.png"), 1280, 800),
-    renderContain(rawPopup, path.join(FIREFOX_DIR, "screenshot-2-popup.png"), 1280, 800),
+    renderContain(rawPopupRules, path.join(FIREFOX_DIR, "screenshot-2-popup.png"), 1280, 800),
+    renderContain(rawPopupRules, path.join(FIREFOX_DIR, "screenshot-2-popup-rules.png"), 1280, 800),
     renderCover(rawSecurity, path.join(FIREFOX_DIR, "screenshot-3-security.png"), 1280, 800),
-    renderCover(rawSecurity, path.join(FIREFOX_DIR, "promotional-1400x560.png"), 1400, 560)
+    renderCover(rawPopupRules, path.join(FIREFOX_DIR, "promotional-1400x560.png"), 1400, 560)
   ]);
 }
 
@@ -318,9 +328,11 @@ async function main() {
 
     const rawOptions = path.join(RAW_DIR, "options-import.png");
     const rawSecurity = path.join(RAW_DIR, "options-security-locked.png");
-    const rawPopup = path.join(RAW_DIR, "popup-locked.png");
+    const rawPopupRules = path.join(RAW_DIR, "popup-rules.png");
+    const rawPopupLocked = path.join(RAW_DIR, "popup-locked.png");
 
     await screenshotOptions(page, rawOptions);
+    await screenshotPopup(context, popupUrl, rawPopupRules, { expandFirstRule: true });
 
     await prepareLockedVault(page);
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -328,9 +340,9 @@ async function main() {
     await page.waitForTimeout(300);
     await screenshotOptions(page, rawSecurity);
 
-    await screenshotPopup(context, popupUrl, rawPopup);
+    await screenshotPopup(context, popupUrl, rawPopupLocked);
 
-    await buildAssets(rawOptions, rawSecurity, rawPopup);
+    await buildAssets(rawOptions, rawSecurity, rawPopupRules);
 
     console.log("Screenshots generated successfully.");
     console.log(`README images: ${README_IMG_DIR}`);

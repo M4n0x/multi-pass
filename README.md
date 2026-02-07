@@ -49,9 +49,11 @@ npm run screenshots
 
 Outputs:
 - README images: `docs/images/page.png`, `docs/images/popup.png`
-- Raw captures: `docs/store-assets/raw/`
+- Raw captures: `docs/store-assets/raw/` (including `popup-rules.png` and `popup-locked.png`)
 - Chrome Web Store assets: `docs/store-assets/chrome/`
 - Firefox Developer Hub assets: `docs/store-assets/firefox/`
+
+The script seeds deterministic fake rules/sources so screenshots visibly show real rule cards in the popup and options page.
 
 Optional flags:
 - `--headless` (for CI/Xvfb environments)
