@@ -23,6 +23,8 @@ const syncAddButton = document.getElementById("sync-add");
 const syncResult = document.getElementById("sync-result");
 const syncList = document.getElementById("sync-list");
 const syncEmpty = document.getElementById("sync-empty");
+const syncWhyButton = document.getElementById("sync-warning-why");
+const syncPopover = document.getElementById("sync-warning-popover");
 
 function showImportResult(message, isError = false) {
   importResult.hidden = false;
@@ -46,6 +48,45 @@ function showSyncResult(message, isError = false) {
   syncResult.style.borderColor = isError ? "#fca5a5" : "#cbd2d9";
   syncResult.style.background = isError ? "#fff5f5" : "#f8fafc";
   syncResult.style.color = isError ? "#b91c1c" : "#1f2933";
+}
+
+function closeSyncPopover() {
+  if (!syncPopover || !syncWhyButton) {
+    return;
+  }
+  if (syncPopover.hidden) {
+    return;
+  }
+  syncPopover.hidden = true;
+  syncWhyButton.setAttribute("aria-expanded", "false");
+}
+
+if (syncWhyButton && syncPopover) {
+  syncWhyButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (syncPopover.hidden) {
+      syncPopover.hidden = false;
+      syncWhyButton.setAttribute("aria-expanded", "true");
+      return;
+    }
+    closeSyncPopover();
+  });
+
+  document.addEventListener("click", (event) => {
+    if (syncPopover.hidden) {
+      return;
+    }
+    if (syncPopover.contains(event.target) || event.target === syncWhyButton) {
+      return;
+    }
+    closeSyncPopover();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeSyncPopover();
+    }
+  });
 }
 
 function isValidHttpsUrl(urlString) {
