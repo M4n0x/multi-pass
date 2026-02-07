@@ -10,7 +10,7 @@ export const BADGE_CONFIG = {
   ok: { text: " ", color: "#4CAF50" },
   auth_failed: { text: " ", color: "#F44336" },
   conflict: { text: " ", color: "#FFC107" },
-  locked: { text: "🔒", color: "#6366F1" },
+  locked: { text: "🔒", color: "#9E9E9E" },
   idle: { text: "", color: "#9E9E9E" }
 };
 

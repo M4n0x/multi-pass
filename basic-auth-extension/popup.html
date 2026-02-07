@@ -23,47 +23,19 @@
       </header>
 
       <section id="vault-panel" class="vault-panel" hidden>
-        <div id="vault-setup" hidden>
-          <div class="vault-title">Secure vault (recommended)</div>
-          <p class="vault-text">
-            Protect credentials with a master password. You will unlock once per browser session.
-          </p>
-          <div class="vault-grid">
-            <input id="vault-setup-password" type="password" placeholder="Master password (min. 8 chars)" />
-            <input id="vault-setup-confirm" type="password" placeholder="Confirm password" />
-          </div>
-          <button id="vault-enable" type="button">Enable lock</button>
-        </div>
-
         <div id="vault-locked" hidden>
           <div class="vault-title">Vault locked</div>
-          <p class="vault-text">Unlock to use stored credentials and rules.</p>
+          <p class="vault-text">Enter your password to unlock credentials for this browser session.</p>
           <div class="vault-inline">
             <input id="vault-unlock-password" type="password" placeholder="Master password" />
             <button id="vault-unlock-btn" type="button">Unlock</button>
           </div>
+          <div id="vault-result" class="result" hidden></div>
         </div>
-
-        <div id="vault-open" hidden>
-          <div class="vault-title">Vault unlocked</div>
-          <p class="vault-text">Credentials are decrypted in memory for this browser session.</p>
-          <div class="vault-inline">
-            <button id="vault-lock-btn" type="button" class="secondary">Lock now</button>
-            <button id="vault-disable-btn" type="button" class="danger">Disable lock</button>
-          </div>
-          <div class="vault-change-grid">
-            <input id="vault-current-password" type="password" placeholder="Current password" />
-            <input id="vault-next-password" type="password" placeholder="New password" />
-            <input id="vault-next-confirm" type="password" placeholder="Confirm new password" />
-            <button id="vault-change-btn" type="button">Change password</button>
-          </div>
-        </div>
-
-        <div id="vault-result" class="result" hidden></div>
       </section>
 
       <section class="actions" id="actions-section">
-        <button id="open-options" type="button" class="secondary">Import/Export</button>
+        <button id="open-options" type="button" class="secondary">Settings</button>
         <button id="add-rule" type="button">Add rule</button>
       </section>
 

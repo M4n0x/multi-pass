@@ -1,14 +1,10 @@
 import { STATUS_LABELS } from "./shared/constants.js";
 import {
-  changeVaultPassword,
-  disableVault,
-  enableVault,
   generateId,
   getRules,
   getVaultState,
   isValidRegex,
   isVaultLockedError,
-  lockVault,
   saveRules,
   unlockVault
 } from "./shared/storage.js";
@@ -23,21 +19,12 @@ const addRuleButton = document.getElementById("add-rule");
 const openOptionsButton = document.getElementById("open-options");
 
 const vaultPanel = document.getElementById("vault-panel");
-const vaultSetup = document.getElementById("vault-setup");
 const vaultLocked = document.getElementById("vault-locked");
-const vaultOpen = document.getElementById("vault-open");
 const vaultResult = document.getElementById("vault-result");
-const vaultSetupPassword = document.getElementById("vault-setup-password");
-const vaultSetupConfirm = document.getElementById("vault-setup-confirm");
-const vaultEnableButton = document.getElementById("vault-enable");
 const vaultUnlockPassword = document.getElementById("vault-unlock-password");
 const vaultUnlockButton = document.getElementById("vault-unlock-btn");
-const vaultLockButton = document.getElementById("vault-lock-btn");
-const vaultDisableButton = document.getElementById("vault-disable-btn");
-const vaultCurrentPassword = document.getElementById("vault-current-password");
-const vaultNextPassword = document.getElementById("vault-next-password");
-const vaultNextConfirm = document.getElementById("vault-next-confirm");
-const vaultChangeButton = document.getElementById("vault-change-btn");
+const actionsSection = document.getElementById("actions-section");
+const rulesSection = document.getElementById("rules-section");
 
 const STATUS_CLASSES = {
   idle: "status-idle",
@@ -136,8 +123,12 @@ function clearVaultResult() {
 
 function setLockedUi(isLocked) {
   addRuleButton.disabled = isLocked;
+  actionsSection.hidden = isLocked;
+  rulesSection.hidden = isLocked;
+  vaultPanel.hidden = !isLocked;
+  vaultLocked.hidden = !isLocked;
+
   if (isLocked) {
-    emptyState.textContent = "Vault locked. Unlock to view rules.";
     updateStatus("locked");
     rules = [];
     renderRules();
@@ -149,31 +140,16 @@ function setLockedUi(isLocked) {
 async function refreshVaultUi() {
   vaultState = await getVaultState();
 
-  if (!vaultState.supported) {
-    vaultPanel.hidden = true;
-    setLockedUi(false);
-    return;
-  }
-
-  vaultPanel.hidden = false;
-
-  vaultSetup.hidden = true;
-  vaultLocked.hidden = true;
-  vaultOpen.hidden = true;
-
-  if (!vaultState.enabled) {
-    vaultSetup.hidden = false;
+  if (!vaultState.supported || !vaultState.enabled) {
     setLockedUi(false);
     return;
   }
 
   if (!vaultState.unlocked) {
-    vaultLocked.hidden = false;
     setLockedUi(true);
     return;
   }
 
-  vaultOpen.hidden = false;
   setLockedUi(false);
 }
 
@@ -791,32 +767,6 @@ function initSortable() {
   });
 }
 
-async function handleVaultEnable() {
-  clearVaultResult();
-  const password = vaultSetupPassword.value;
-  const confirm = vaultSetupConfirm.value;
-  if (password.length < 8) {
-    showVaultResult("Password must be at least 8 characters.", true);
-    return;
-  }
-  if (password !== confirm) {
-    showVaultResult("Passwords do not match.", true);
-    return;
-  }
-
-  const result = await enableVault(password);
-  if (!result.ok) {
-    showVaultResult(mapVaultError(result.error), true);
-    return;
-  }
-
-  vaultSetupPassword.value = "";
-  vaultSetupConfirm.value = "";
-  showVaultResult("Vault lock enabled.");
-  await refreshVaultUi();
-  await loadRules();
-  await refreshStatus();
-}
 
 async function handleVaultUnlock() {
   clearVaultResult();
@@ -833,61 +783,8 @@ async function handleVaultUnlock() {
   await refreshStatus();
 }
 
-async function handleVaultLock() {
-  clearVaultResult();
-  const result = await lockVault();
-  if (!result.ok) {
-    showVaultResult(mapVaultError(result.error), true);
-    return;
-  }
-  showVaultResult("Vault locked.");
-  await refreshVaultUi();
-  await loadRules();
-  await refreshStatus();
-}
 
-async function handleVaultDisable() {
-  clearVaultResult();
-  if (!window.confirm("Disable vault lock and store rules unencrypted?")) {
-    return;
-  }
-  const result = await disableVault();
-  if (!result.ok) {
-    showVaultResult(mapVaultError(result.error), true);
-    return;
-  }
-  showVaultResult("Vault lock disabled.");
-  await refreshVaultUi();
-  await loadRules();
-  await refreshStatus();
-}
 
-async function handleVaultChangePassword() {
-  clearVaultResult();
-  const currentPassword = vaultCurrentPassword.value;
-  const nextPassword = vaultNextPassword.value;
-  const nextConfirm = vaultNextConfirm.value;
-
-  if (nextPassword.length < 8) {
-    showVaultResult("New password must be at least 8 characters.", true);
-    return;
-  }
-  if (nextPassword !== nextConfirm) {
-    showVaultResult("New passwords do not match.", true);
-    return;
-  }
-
-  const result = await changeVaultPassword(currentPassword, nextPassword);
-  if (!result.ok) {
-    showVaultResult(mapVaultError(result.error), true);
-    return;
-  }
-
-  vaultCurrentPassword.value = "";
-  vaultNextPassword.value = "";
-  vaultNextConfirm.value = "";
-  showVaultResult("Password updated.");
-}
 
 async function init() {
   clearVaultResult();
@@ -905,9 +802,6 @@ async function init() {
 addRuleButton.addEventListener("click", addRule);
 openOptionsButton.addEventListener("click", () => chrome.runtime.openOptionsPage());
 
-if (vaultEnableButton) {
-  vaultEnableButton.addEventListener("click", handleVaultEnable);
-}
 if (vaultUnlockButton) {
   vaultUnlockButton.addEventListener("click", handleVaultUnlock);
 }
@@ -918,15 +812,6 @@ if (vaultUnlockPassword) {
       handleVaultUnlock();
     }
   });
-}
-if (vaultLockButton) {
-  vaultLockButton.addEventListener("click", handleVaultLock);
-}
-if (vaultDisableButton) {
-  vaultDisableButton.addEventListener("click", handleVaultDisable);
-}
-if (vaultChangeButton) {
-  vaultChangeButton.addEventListener("click", handleVaultChangePassword);
 }
 
 chrome.runtime.onMessage.addListener((message) => {

@@ -1,12 +1,17 @@
 import {
+  changeVaultPassword,
+  disableVault,
+  enableVault,
   generateId,
   getRules,
   getSyncSources,
   getVaultState,
   isValidRegex,
   isVaultLockedError,
+  lockVault,
   saveRules,
-  saveSyncSources
+  saveSyncSources,
+  unlockVault
 } from "./shared/storage.js";
 
 const exportButton = document.getElementById("export-btn");
@@ -28,6 +33,31 @@ const syncEmpty = document.getElementById("sync-empty");
 const syncWhyButton = document.getElementById("sync-warning-why");
 const syncPopover = document.getElementById("sync-warning-popover");
 const vaultNotice = document.getElementById("vault-notice");
+
+const tabImportButton = document.getElementById("tab-import-btn");
+const tabSecurityButton = document.getElementById("tab-security-btn");
+const tabImportPanel = document.getElementById("tab-import");
+const tabSecurityPanel = document.getElementById("tab-security");
+
+const securitySetup = document.getElementById("security-setup");
+const securityLocked = document.getElementById("security-locked");
+const securityOpen = document.getElementById("security-open");
+const securityResult = document.getElementById("security-result");
+
+const securitySetupPassword = document.getElementById("security-setup-password");
+const securitySetupConfirm = document.getElementById("security-setup-confirm");
+const securityEnableButton = document.getElementById("security-enable-btn");
+
+const securityUnlockPassword = document.getElementById("security-unlock-password");
+const securityUnlockButton = document.getElementById("security-unlock-btn");
+
+const securityLockButton = document.getElementById("security-lock-btn");
+const securityDisableButton = document.getElementById("security-disable-btn");
+
+const securityCurrentPassword = document.getElementById("security-current-password");
+const securityNextPassword = document.getElementById("security-next-password");
+const securityNextConfirm = document.getElementById("security-next-confirm");
+const securityChangeButton = document.getElementById("security-change-btn");
 
 let optionsLocked = false;
 
@@ -53,6 +83,54 @@ function showSyncResult(message, isError = false) {
   syncResult.style.borderColor = isError ? "#fca5a5" : "#cbd2d9";
   syncResult.style.background = isError ? "#fff5f5" : "#f8fafc";
   syncResult.style.color = isError ? "#b91c1c" : "#1f2933";
+}
+
+function showSecurityResult(message, isError = false) {
+  if (!securityResult) {
+    return;
+  }
+  securityResult.hidden = false;
+  securityResult.textContent = message;
+  securityResult.style.borderColor = isError ? "#fca5a5" : "#cbd2d9";
+  securityResult.style.background = isError ? "#fff5f5" : "#f8fafc";
+  securityResult.style.color = isError ? "#b91c1c" : "#1f2933";
+}
+
+function clearSecurityResult() {
+  if (!securityResult) {
+    return;
+  }
+  securityResult.hidden = true;
+  securityResult.textContent = "";
+}
+
+function mapVaultError(code) {
+  switch (code) {
+    case "weak-password":
+      return "Use a stronger password (minimum 8 characters).";
+    case "already-enabled":
+      return "Vault lock is already enabled.";
+    case "invalid-password":
+      return "Invalid password.";
+    case "locked":
+      return "Unlock the vault first.";
+    case "not-enabled":
+      return "Vault lock is not enabled.";
+    default:
+      return "Security action failed.";
+  }
+}
+
+function setActiveTab(tab) {
+  const importActive = tab !== "security";
+  tabImportButton?.classList.toggle("active", importActive);
+  tabSecurityButton?.classList.toggle("active", !importActive);
+  if (tabImportPanel) {
+    tabImportPanel.hidden = !importActive;
+  }
+  if (tabSecurityPanel) {
+    tabSecurityPanel.hidden = importActive;
+  }
 }
 
 function closeSyncPopover() {
@@ -130,6 +208,46 @@ async function refreshLockState() {
   const locked = Boolean(vault.supported && vault.enabled && !vault.unlocked);
   setLockedMode(locked);
   return locked;
+}
+
+async function refreshSecurityState() {
+  const vault = await getVaultState();
+
+  if (securitySetup) {
+    securitySetup.hidden = true;
+  }
+  if (securityLocked) {
+    securityLocked.hidden = true;
+  }
+  if (securityOpen) {
+    securityOpen.hidden = true;
+  }
+
+  if (!vault.supported) {
+    showSecurityResult("Vault controls are not available in this browser build.", true);
+    return vault;
+  }
+
+  clearSecurityResult();
+
+  if (!vault.enabled) {
+    if (securitySetup) {
+      securitySetup.hidden = false;
+    }
+    return vault;
+  }
+
+  if (!vault.unlocked) {
+    if (securityLocked) {
+      securityLocked.hidden = false;
+    }
+    return vault;
+  }
+
+  if (securityOpen) {
+    securityOpen.hidden = false;
+  }
+  return vault;
 }
 
 function isLockedError(error) {
@@ -678,16 +796,133 @@ async function removeSyncSource(sourceId) {
   }
 }
 
+async function handleSecurityEnable() {
+  clearSecurityResult();
+  const password = securitySetupPassword?.value || "";
+  const confirm = securitySetupConfirm?.value || "";
+
+  if (password.length < 8) {
+    showSecurityResult("Password must be at least 8 characters.", true);
+    return;
+  }
+  if (password !== confirm) {
+    showSecurityResult("Passwords do not match.", true);
+    return;
+  }
+
+  const result = await enableVault(password);
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+
+  if (securitySetupPassword) securitySetupPassword.value = "";
+  if (securitySetupConfirm) securitySetupConfirm.value = "";
+  showSecurityResult("Vault lock enabled.");
+  await refreshSecurityState();
+  await refreshView();
+}
+
+async function handleSecurityUnlock() {
+  clearSecurityResult();
+  const password = securityUnlockPassword?.value || "";
+  const result = await unlockVault(password);
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+  if (securityUnlockPassword) securityUnlockPassword.value = "";
+  showSecurityResult("Vault unlocked.");
+  await refreshSecurityState();
+  await refreshView();
+}
+
+async function handleSecurityLock() {
+  clearSecurityResult();
+  const result = await lockVault();
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+  showSecurityResult("Vault locked.");
+  await refreshSecurityState();
+  await refreshView();
+}
+
+async function handleSecurityDisable() {
+  clearSecurityResult();
+  if (!window.confirm("Disable vault lock and store rules unencrypted?")) {
+    return;
+  }
+  const result = await disableVault();
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+  showSecurityResult("Vault lock disabled.");
+  await refreshSecurityState();
+  await refreshView();
+}
+
+async function handleSecurityChangePassword() {
+  clearSecurityResult();
+  const currentPassword = securityCurrentPassword?.value || "";
+  const nextPassword = securityNextPassword?.value || "";
+  const nextConfirm = securityNextConfirm?.value || "";
+
+  if (nextPassword.length < 8) {
+    showSecurityResult("New password must be at least 8 characters.", true);
+    return;
+  }
+  if (nextPassword !== nextConfirm) {
+    showSecurityResult("New passwords do not match.", true);
+    return;
+  }
+
+  const result = await changeVaultPassword(currentPassword, nextPassword);
+  if (!result.ok) {
+    showSecurityResult(mapVaultError(result.error), true);
+    return;
+  }
+
+  if (securityCurrentPassword) securityCurrentPassword.value = "";
+  if (securityNextPassword) securityNextPassword.value = "";
+  if (securityNextConfirm) securityNextConfirm.value = "";
+  showSecurityResult("Password updated.");
+}
+
 exportButton.addEventListener("click", handleExport);
 importButton.addEventListener("click", handleFileImport);
 importPasteButton.addEventListener("click", handlePasteImport);
 syncAddButton.addEventListener("click", addSyncSource);
 
+tabImportButton?.addEventListener("click", () => setActiveTab("import"));
+tabSecurityButton?.addEventListener("click", async () => {
+  setActiveTab("security");
+  await refreshSecurityState();
+});
+
+securityEnableButton?.addEventListener("click", handleSecurityEnable);
+securityUnlockButton?.addEventListener("click", handleSecurityUnlock);
+securityLockButton?.addEventListener("click", handleSecurityLock);
+securityDisableButton?.addEventListener("click", handleSecurityDisable);
+securityChangeButton?.addEventListener("click", handleSecurityChangePassword);
+
+securityUnlockPassword?.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    handleSecurityUnlock();
+  }
+});
+
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local" || (!changes.rules && !changes.syncSources && !changes.vaultPayload)) {
     return;
   }
+  refreshSecurityState();
   refreshView();
 });
 
+setActiveTab("import");
+refreshSecurityState();
 refreshView();
