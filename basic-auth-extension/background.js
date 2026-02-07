@@ -625,7 +625,7 @@ async function beginVaultWebAuthnSetup() {
       challenge: pendingWebAuthnSetup.challenge,
       userId: bytesToBase64(userId),
       rpName: "Multi-pass Vault",
-      userName: "vault-user",
+      userName: "multi-pass-user",
       userDisplayName: "Multi-pass Vault",
       timeout: 90_000,
       pubKeyCredParams: [

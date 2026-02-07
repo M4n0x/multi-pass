@@ -123,7 +123,7 @@ export async function runWebAuthnSetup(options) {
       },
       user: {
         id: userId,
-        name: options.userName || "vault-user",
+        name: options.userName || "multi-pass-user",
         displayName: options.userDisplayName || "Multi-pass Vault"
       },
       timeout: typeof options.timeout === "number" ? options.timeout : 90_000,
