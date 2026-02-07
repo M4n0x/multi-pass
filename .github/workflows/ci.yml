@@ -67,12 +67,6 @@ jobs:
           name: multipass-firefox-mv3
           path: dist/multipass-firefox-mv3-v*.zip
 
-      - name: Upload Firefox MV2 bundle
-        uses: actions/upload-artifact@v4
-        with:
-          name: multipass-firefox-mv2
-          path: dist/multipass-firefox-mv2-v*.zip
-
       - name: Create release
         if: >-
           github.event_name == 'push' &&
@@ -92,4 +86,3 @@ jobs:
           fi
           gh release upload "${tag}" dist/multipass-chromium-v*.zip --clobber
           gh release upload "${tag}" dist/multipass-firefox-mv3-v*.zip --clobber
-          gh release upload "${tag}" dist/multipass-firefox-mv2-v*.zip --clobber

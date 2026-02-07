@@ -4,7 +4,6 @@ const { execSync } = require("child_process");
 
 const rootDir = path.resolve(__dirname, "..");
 const baseManifestPath = path.join(rootDir, "manifests", "manifest.base.mv3.json");
-const firefoxMv2ManifestPath = path.join(rootDir, "manifests", "manifest.firefox.mv2.json");
 const devManifestPath = path.join(rootDir, "basic-auth-extension", "manifest.json");
 
 function readGitMessage() {
@@ -71,7 +70,6 @@ async function main() {
   const nextVersion = bumpVersion(currentVersion, level);
 
   await updateVersion(baseManifestPath, nextVersion);
-  await updateVersion(firefoxMv2ManifestPath, nextVersion);
   await updateVersion(devManifestPath, nextVersion);
 
   console.log(`Version bumped to ${nextVersion}.`);

@@ -13,7 +13,7 @@ Multi-pass V2 is a browser extension that supplies HTTP Basic Auth credentials b
 - **Biometric unlock (MV3):** optional Touch ID / Windows Hello-style unlock via WebAuthn with password fallback.
 - Sync rules from HTTPS JSON snippets (GitLab snippet links supported).
 - Import/export for local rules only.
-- Chromium MV3 and Firefox MV3/MV2 builds.
+- Chromium MV3 and Firefox MV3 builds.
 
 ## Usage
 1. Load the extension in your browser.
@@ -27,7 +27,7 @@ When vault lock is enabled, credentials are only usable after unlocking the exte
 If biometric unlock is enabled, you can unlock with biometrics (when available) or fallback to password.
 Changing or disabling the vault password resets biometric unlock and requires setup again.
 
-> Note: biometric unlock is available on MV3 builds only. MV2 does not expose this security path.
+> Note: biometric unlock is available on all current builds (MV3).
 
 ## Build
 Generate bundles for Chromium and Firefox:

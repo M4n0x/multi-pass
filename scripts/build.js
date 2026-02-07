@@ -21,13 +21,6 @@ const targets = [
     manifestOverride: "manifest.firefox.mv3.json",
     outputDir: "firefox-mv3",
     zipBase: "multipass-firefox-mv3"
-  },
-  {
-    name: "firefox-mv2",
-    manifestBase: null,
-    manifestOverride: "manifest.firefox.mv2.json",
-    outputDir: "firefox-mv2",
-    zipBase: "multipass-firefox-mv2"
   }
 ];
 
@@ -65,6 +58,10 @@ async function copyExtension(targetDir) {
   await fs.cp(sourceDir, targetDir, { recursive: true });
 }
 
+async function pruneLegacyArtifacts(targetDir) {
+  await fs.rm(path.join(targetDir, "background-mv2.js"), { force: true });
+}
+
 async function writeManifest(targetDir, manifest) {
   const manifestPath = path.join(targetDir, "manifest.json");
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
@@ -78,6 +75,7 @@ function zipTarget(targetDir, zipName) {
 async function buildTarget(target) {
   const targetDir = path.join(distDir, target.outputDir);
   await copyExtension(targetDir);
+  await pruneLegacyArtifacts(targetDir);
 
   const overridePath = path.join(manifestDir, target.manifestOverride);
   const overrideManifest = await readJson(overridePath);
