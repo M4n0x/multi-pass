@@ -370,6 +370,14 @@ input[type="file"] {
   color: #1f2933;
 }
 
+.security-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .security-grid {
   display: grid;
   gap: 10px;
@@ -393,6 +401,7 @@ input[type="file"] {
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .security-actions button {

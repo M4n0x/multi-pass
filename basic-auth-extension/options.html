@@ -94,8 +94,16 @@
 
       <section id="tab-security" class="tab-panel" hidden>
         <section class="panel security-panel">
-          <h2>Vault lock</h2>
-          <p>Protect local credentials with a master password.</p>
+          <div class="security-header">
+            <div>
+              <h2>Vault lock</h2>
+              <p>Protect local credentials with a master password.</p>
+            </div>
+            <div id="security-open-actions" class="security-actions" hidden>
+              <button id="security-lock-btn" type="button" class="secondary">Lock now</button>
+              <button id="security-disable-btn" type="button" class="danger">Disable lock</button>
+            </div>
+          </div>
 
           <div id="security-setup" hidden>
             <div class="security-grid">
@@ -115,10 +123,6 @@
 
           <div id="security-open" hidden>
             <p class="security-note">Vault is unlocked for this browser session.</p>
-            <div class="security-actions">
-              <button id="security-lock-btn" type="button" class="secondary">Lock now</button>
-              <button id="security-disable-btn" type="button" class="danger">Disable lock</button>
-            </div>
             <div class="security-grid">
               <input id="security-current-password" type="password" placeholder="Current password" />
               <input id="security-next-password" type="password" placeholder="New password" />

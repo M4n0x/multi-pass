@@ -42,6 +42,7 @@ const tabSecurityPanel = document.getElementById("tab-security");
 const securitySetup = document.getElementById("security-setup");
 const securityLocked = document.getElementById("security-locked");
 const securityOpen = document.getElementById("security-open");
+const securityOpenActions = document.getElementById("security-open-actions");
 const securityResult = document.getElementById("security-result");
 
 const securitySetupPassword = document.getElementById("security-setup-password");
@@ -222,6 +223,9 @@ async function refreshSecurityState() {
   if (securityOpen) {
     securityOpen.hidden = true;
   }
+  if (securityOpenActions) {
+    securityOpenActions.hidden = true;
+  }
 
   if (!vault.supported) {
     showSecurityResult("Vault controls are not available in this browser build.", true);
@@ -246,6 +250,9 @@ async function refreshSecurityState() {
 
   if (securityOpen) {
     securityOpen.hidden = false;
+  }
+  if (securityOpenActions) {
+    securityOpenActions.hidden = false;
   }
   return vault;
 }
