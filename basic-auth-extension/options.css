@@ -68,11 +68,16 @@ p {
   background: #fffbeb;
   color: #92400e;
   font-size: 12px;
-  position: relative;
 }
 
 .sync-warning-icon {
   font-size: 14px;
+}
+
+.sync-popover-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
 }
 
 .sync-popover-trigger {
@@ -89,7 +94,7 @@ p {
 
 .sync-popover {
   position: absolute;
-  left: 12px;
+  left: 0;
   top: calc(100% + 8px);
   max-width: 420px;
   background: #ffffff;
@@ -105,7 +110,7 @@ p {
   content: "";
   position: absolute;
   top: -6px;
-  left: 20px;
+  left: 10px;
   width: 12px;
   height: 12px;
   background: #ffffff;

@@ -48,19 +48,21 @@
           <span class="sync-warning-icon">⚠️</span>
           <span>
             Only add sources you trust. Synced rules can overwrite credentials.
-            <button
-              id="sync-warning-why"
-              class="sync-popover-trigger"
-              type="button"
-              aria-expanded="false"
-              aria-controls="sync-warning-popover"
-            >
-              Why?
-            </button>
+            <span class="sync-popover-wrap">
+              <button
+                id="sync-warning-why"
+                class="sync-popover-trigger"
+                type="button"
+                aria-expanded="false"
+                aria-controls="sync-warning-popover"
+              >
+                Why?
+              </button>
+              <div id="sync-warning-popover" class="sync-popover" role="dialog" hidden>
+                Remote sources can change without notice. Verify the JSON content and host before syncing.
+              </div>
+            </span>
           </span>
-          <div id="sync-warning-popover" class="sync-popover" role="dialog" hidden>
-            Remote sources can change without notice. Verify the JSON content and host before syncing.
-          </div>
         </div>
         <div class="sync-controls">
           <input id="sync-label" type="text" placeholder="Label (optional)" />
