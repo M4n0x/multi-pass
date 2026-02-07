@@ -9,15 +9,19 @@ Multi-pass V2 is a browser extension that supplies HTTP Basic Auth credentials b
 ## Features
 - Regex-based Basic Auth rules with priority ordering.
 - Per-tab status with conflict warnings.
+- **Security vault lock (MV3):** optional master password, encrypted credentials at rest, lock/unlock from popup.
 - Sync rules from HTTPS JSON snippets (GitLab snippet links supported).
 - Import/export for local rules only.
 - Chromium MV3 and Firefox MV3/MV2 builds.
 
 ## Usage
 1. Load the extension in your browser.
-2. Open a Basic Auth page and click **Add rule** to create a new entry.
-3. Edit the rule details and **Save**.
-4. Use the options page to import/export or add sync sources.
+2. (Optional, recommended) In popup, enable **Secure vault** with a master password.
+3. Open a Basic Auth page and click **Add rule** to create a new entry.
+4. Edit the rule details and **Save**.
+5. Use the options page to import/export or add sync sources.
+
+When vault lock is enabled, credentials are only usable after unlocking the extension in the popup.
 
 ## Build
 Generate bundles for Chromium and Firefox:

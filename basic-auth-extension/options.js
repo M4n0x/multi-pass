@@ -2,7 +2,9 @@ import {
   generateId,
   getRules,
   getSyncSources,
+  getVaultState,
   isValidRegex,
+  isVaultLockedError,
   saveRules,
   saveSyncSources
 } from "./shared/storage.js";
@@ -25,6 +27,9 @@ const syncList = document.getElementById("sync-list");
 const syncEmpty = document.getElementById("sync-empty");
 const syncWhyButton = document.getElementById("sync-warning-why");
 const syncPopover = document.getElementById("sync-warning-popover");
+const vaultNotice = document.getElementById("vault-notice");
+
+let optionsLocked = false;
 
 function showImportResult(message, isError = false) {
   importResult.hidden = false;
@@ -87,6 +92,48 @@ if (syncWhyButton && syncPopover) {
       closeSyncPopover();
     }
   });
+}
+
+function setControlsDisabled(disabled) {
+  const controls = [
+    exportButton,
+    importButton,
+    importPasteButton,
+    syncAddButton,
+    importFile,
+    importText,
+    syncLabelInput,
+    syncUrlInput
+  ];
+  for (const control of controls) {
+    if (!control) {
+      continue;
+    }
+    control.disabled = disabled;
+  }
+}
+
+function setLockedMode(locked) {
+  optionsLocked = locked;
+  setControlsDisabled(locked);
+  if (vaultNotice) {
+    vaultNotice.hidden = !locked;
+  }
+  if (locked) {
+    summary.textContent = "Rules: locked";
+    renderRulesList([]);
+  }
+}
+
+async function refreshLockState() {
+  const vault = await getVaultState();
+  const locked = Boolean(vault.supported && vault.enabled && !vault.unlocked);
+  setLockedMode(locked);
+  return locked;
+}
+
+function isLockedError(error) {
+  return isVaultLockedError(error);
 }
 
 function isValidHttpsUrl(urlString) {
@@ -354,10 +401,12 @@ function renderSyncSources(sources, rules) {
     const resyncButton = document.createElement("button");
     resyncButton.type = "button";
     resyncButton.textContent = "Re-sync";
+    resyncButton.disabled = optionsLocked;
     resyncButton.addEventListener("click", () => resyncSource(source.id));
     const removeButton = document.createElement("button");
     removeButton.type = "button";
     removeButton.textContent = "Remove";
+    removeButton.disabled = optionsLocked;
     removeButton.addEventListener("click", () => removeSyncSource(source.id));
     actions.append(resyncButton, removeButton);
 
@@ -367,23 +416,53 @@ function renderSyncSources(sources, rules) {
 }
 
 async function refreshView() {
-  const [rules, syncSources] = await Promise.all([getRules(), getSyncSources()]);
-  summary.textContent = `Rules: ${rules.length}`;
-  renderRulesList(rules);
-  renderSyncSources(syncSources, rules);
+  const locked = await refreshLockState();
+  const syncSources = await getSyncSources();
+
+  if (locked) {
+    renderSyncSources(syncSources, []);
+    return;
+  }
+
+  try {
+    const rules = await getRules();
+    summary.textContent = `Rules: ${rules.length}`;
+    renderRulesList(rules);
+    renderSyncSources(syncSources, rules);
+  } catch (error) {
+    if (isLockedError(error)) {
+      setLockedMode(true);
+      renderSyncSources(syncSources, []);
+      return;
+    }
+    throw error;
+  }
 }
 
 async function handleExport() {
-  const rules = (await getRules()).filter((rule) => !rule.syncSourceId);
-  const payload = JSON.stringify({ rules }, null, 2);
-  const blob = new Blob([payload], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "basic-auth-rules.json";
-  link.click();
-  URL.revokeObjectURL(url);
-  showExportResult("Exported rules successfully.");
+  if (optionsLocked) {
+    showExportResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
+  try {
+    const rules = (await getRules()).filter((rule) => !rule.syncSourceId);
+    const payload = JSON.stringify({ rules }, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "basic-auth-rules.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    showExportResult("Exported rules successfully.");
+  } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showExportResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
+    showExportResult("Export failed.", true);
+  }
 }
 
 async function applyIncomingRules(incoming) {
@@ -418,6 +497,10 @@ async function applyIncomingRules(incoming) {
 }
 
 async function handleFileImport() {
+  if (optionsLocked) {
+    showImportResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   const file = importFile.files?.[0];
   if (!file) {
     showImportResult("Select a JSON or text file to import.", true);
@@ -429,6 +512,11 @@ async function handleFileImport() {
     const incoming = parseIncomingRules(parsed);
     await applyIncomingRules(incoming);
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showImportResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showImportResult("Import failed. Ensure the file is valid JSON.", true);
   } finally {
     importFile.value = "";
@@ -436,6 +524,10 @@ async function handleFileImport() {
 }
 
 async function handlePasteImport() {
+  if (optionsLocked) {
+    showImportResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   const text = importText.value.trim();
   if (!text) {
     showImportResult("Paste JSON to import.", true);
@@ -447,6 +539,11 @@ async function handlePasteImport() {
     await applyIncomingRules(incoming);
     importText.value = "";
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showImportResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showImportResult("Import failed. Ensure the pasted JSON is valid.", true);
   }
 }
@@ -484,6 +581,10 @@ async function fetchRulesFromUrl(url) {
 }
 
 async function addSyncSource() {
+  if (optionsLocked) {
+    showSyncResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   const url = syncUrlInput.value.trim();
   const label = syncLabelInput.value.trim();
   if (!isValidHttpsUrl(url)) {
@@ -513,11 +614,20 @@ async function addSyncSource() {
     syncLabelInput.value = "";
     showSyncResult(`Synced ${syncedRules.length} rules from ${newSource.name}.`);
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showSyncResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showSyncResult(error?.message || "Sync failed. Check the URL and JSON format.", true);
   }
 }
 
 async function resyncSource(sourceId) {
+  if (optionsLocked) {
+    showSyncResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
   try {
     const [sources, existingRules] = await Promise.all([getSyncSources(), getRules()]);
     const source = sources.find((item) => item.id === sourceId);
@@ -536,18 +646,36 @@ async function resyncSource(sourceId) {
     await refreshView();
     showSyncResult(`Re-synced ${syncedRules.length} rules from ${getSourceLabel(source)}.`);
   } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showSyncResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
     showSyncResult(error?.message || "Re-sync failed. Check the URL and JSON format.", true);
   }
 }
 
 async function removeSyncSource(sourceId) {
-  const [sources, rules] = await Promise.all([getSyncSources(), getRules()]);
-  const nextSources = sources.filter((source) => source.id !== sourceId);
-  const nextRules = rules.filter((rule) => rule.syncSourceId !== sourceId);
-  await saveSyncSources(nextSources);
-  await saveRules(nextRules);
-  await refreshView();
-  showSyncResult("Sync source removed.");
+  if (optionsLocked) {
+    showSyncResult("Vault is locked. Unlock from the popup first.", true);
+    return;
+  }
+  try {
+    const [sources, rules] = await Promise.all([getSyncSources(), getRules()]);
+    const nextSources = sources.filter((source) => source.id !== sourceId);
+    const nextRules = rules.filter((rule) => rule.syncSourceId !== sourceId);
+    await saveSyncSources(nextSources);
+    await saveRules(nextRules);
+    await refreshView();
+    showSyncResult("Sync source removed.");
+  } catch (error) {
+    if (isLockedError(error)) {
+      await refreshView();
+      showSyncResult("Vault is locked. Unlock from the popup first.", true);
+      return;
+    }
+    showSyncResult("Failed to remove sync source.", true);
+  }
 }
 
 exportButton.addEventListener("click", handleExport);
@@ -556,7 +684,7 @@ importPasteButton.addEventListener("click", handlePasteImport);
 syncAddButton.addEventListener("click", addSyncSource);
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || (!changes.rules && !changes.syncSources)) {
+  if (areaName !== "local" || (!changes.rules && !changes.syncSources && !changes.vaultPayload)) {
     return;
   }
   refreshView();
