@@ -120,6 +120,10 @@
               <input id="security-unlock-password" type="password" placeholder="Master password" />
               <button id="security-unlock-btn" type="button">Unlock</button>
             </div>
+            <button id="security-webauthn-unlock" type="button" class="secondary" hidden>
+              Unlock with biometrics
+            </button>
+            <p id="security-webauthn-locked-note" class="security-note" hidden></p>
           </div>
 
           <div id="security-open" hidden>
@@ -130,6 +134,19 @@
               <input id="security-next-confirm" type="password" placeholder="Confirm new password" />
               <button id="security-change-btn" type="button">Change password</button>
             </div>
+
+            <div id="security-webauthn" class="security-webauthn" hidden>
+              <p id="security-webauthn-state" class="security-note"></p>
+              <div class="security-actions">
+                <button id="security-webauthn-enable" type="button" class="secondary" hidden>
+                  Enable biometric unlock
+                </button>
+                <button id="security-webauthn-disable" type="button" class="secondary" hidden>
+                  Disable biometric unlock
+                </button>
+              </div>
+            </div>
+
             <div id="security-open-actions" class="security-actions-row" hidden>
               <div class="security-actions">
                 <button id="security-lock-btn" type="button" class="secondary">Lock now</button>

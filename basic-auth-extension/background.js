@@ -5,8 +5,11 @@ const VAULT_PAYLOAD_KEY = "vaultPayload";
 const VAULT_SESSION_KEY = "vaultSessionKeyV1";
 const VAULT_PERSISTENT_KEY = "vaultPersistentSessionKeyV1";
 const VAULT_SETTINGS_KEY = "vaultSettings";
+const VAULT_WEBAUTHN_KEY = "vaultWebAuthnV1";
 const VAULT_VERSION = 1;
 const VAULT_KDF_ITERATIONS = 210000;
+const WEBAUTHN_VERSION = 1;
+const WEBAUTHN_CHALLENGE_TIMEOUT_MS = 2 * 60 * 1000;
 const DEFAULT_VAULT_SETTINGS = {
   lockOnBrowserClose: true
 };
@@ -19,6 +22,9 @@ let vaultPayload = null;
 let vaultSessionKey = null;
 let vaultUnlocked = false;
 let vaultSettings = { ...DEFAULT_VAULT_SETTINGS };
+let vaultWebAuthn = null;
+let pendingWebAuthnSetup = null;
+let pendingWebAuthnUnlock = null;
 let initPromise = null;
 
 function setBadge(tabId, state) {
@@ -173,6 +179,28 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+function base64UrlToBytes(value) {
+  if (typeof value !== "string") {
+    return new Uint8Array();
+  }
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padding = normalized.length % 4;
+  const padded = padding === 0 ? normalized : `${normalized}${"=".repeat(4 - padding)}`;
+  return base64ToBytes(padded);
+}
+
+function bytesEqual(left, right) {
+  if (!left || !right || left.length !== right.length) {
+    return false;
+  }
+  for (let i = 0; i < left.length; i += 1) {
+    if (left[i] !== right[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function normalizeVaultSettings(raw) {
   return {
     lockOnBrowserClose:
@@ -200,6 +228,48 @@ function getVaultSettingsPayload() {
     supported: true,
     lockOnBrowserClose: Boolean(vaultSettings.lockOnBrowserClose)
   };
+}
+
+function isValidVaultWebAuthnPayload(payload) {
+  return Boolean(
+    payload &&
+      payload.version === WEBAUTHN_VERSION &&
+      typeof payload.credentialId === "string" &&
+      payload.credentialId &&
+      typeof payload.prfSalt === "string" &&
+      payload.wrappedSessionKey &&
+      typeof payload.wrappedSessionKey.iv === "string" &&
+      typeof payload.wrappedSessionKey.data === "string"
+  );
+}
+
+function getVaultWebAuthnStatePayload() {
+  return {
+    supported: true,
+    available: isVaultEnabled(),
+    configured: isValidVaultWebAuthnPayload(vaultWebAuthn)
+  };
+}
+
+function clearPendingWebAuthnRequests() {
+  pendingWebAuthnSetup = null;
+  pendingWebAuthnUnlock = null;
+}
+
+function clearExpiredWebAuthnRequests() {
+  const now = Date.now();
+  if (
+    pendingWebAuthnSetup &&
+    now - pendingWebAuthnSetup.createdAt > WEBAUTHN_CHALLENGE_TIMEOUT_MS
+  ) {
+    pendingWebAuthnSetup = null;
+  }
+  if (
+    pendingWebAuthnUnlock &&
+    now - pendingWebAuthnUnlock.createdAt > WEBAUTHN_CHALLENGE_TIMEOUT_MS
+  ) {
+    pendingWebAuthnUnlock = null;
+  }
 }
 
 function isValidVaultPayload(payload) {
@@ -254,6 +324,82 @@ async function importSessionKey(rawBase64) {
   );
 }
 
+async function encryptStringWithKey(value, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const plaintext = new TextEncoder().encode(String(value));
+  const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext);
+  return {
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(new Uint8Array(encrypted))
+  };
+}
+
+async function decryptStringWithKey(ciphertext, key) {
+  const decrypted = await crypto.subtle.decrypt(
+    {
+      name: "AES-GCM",
+      iv: base64ToBytes(ciphertext.iv)
+    },
+    key,
+    base64ToBytes(ciphertext.data)
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+async function deriveWebAuthnWrapKey(prfOutputBase64, prfSaltBase64) {
+  const prfBytes = base64ToBytes(prfOutputBase64);
+  const saltBytes = base64ToBytes(prfSaltBase64);
+  const combined = new Uint8Array(prfBytes.length + saltBytes.length);
+  combined.set(prfBytes, 0);
+  combined.set(saltBytes, prfBytes.length);
+  const digest = await crypto.subtle.digest("SHA-256", combined);
+  return crypto.subtle.importKey(
+    "raw",
+    digest,
+    { name: "AES-GCM" },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+function parseClientData(clientDataBase64) {
+  const bytes = base64ToBytes(clientDataBase64);
+  const json = new TextDecoder().decode(bytes);
+  return JSON.parse(json);
+}
+
+function isExpectedClientOrigin(origin) {
+  if (typeof origin !== "string") {
+    return false;
+  }
+  try {
+    const runtimeOrigin = new URL(chrome.runtime.getURL("/")).origin;
+    return origin === runtimeOrigin;
+  } catch (error) {
+    return false;
+  }
+}
+
+function sanitizeCredentialDescriptor(descriptor) {
+  if (!descriptor || typeof descriptor !== "object") {
+    return null;
+  }
+  const credentialId =
+    typeof descriptor.credentialId === "string"
+      ? descriptor.credentialId
+      : typeof descriptor.id === "string"
+        ? descriptor.id
+        : "";
+  if (!credentialId) {
+    return null;
+  }
+  return {
+    id: credentialId,
+    type: "public-key",
+    transports: Array.isArray(descriptor.transports) ? descriptor.transports : undefined
+  };
+}
+
 async function encryptRulesWithKey(rules, key) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(cloneRules(rules)));
@@ -302,6 +448,7 @@ async function lockVault({ clearSession = true } = {}) {
   vaultUnlocked = false;
   vaultSessionKey = null;
   rulesCache = [];
+  clearPendingWebAuthnRequests();
   if (clearSession) {
     await clearPersistedSessionKey();
   }
@@ -366,22 +513,35 @@ async function tryRestoreSession() {
 }
 
 async function initializeState() {
-  const result = await localGet([RULES_KEY, VAULT_PAYLOAD_KEY, VAULT_SETTINGS_KEY]);
+  const result = await localGet([
+    RULES_KEY,
+    VAULT_PAYLOAD_KEY,
+    VAULT_SETTINGS_KEY,
+    VAULT_WEBAUTHN_KEY
+  ]);
   const payload = result[VAULT_PAYLOAD_KEY];
   vaultPayload = isValidVaultPayload(payload) ? payload : null;
   vaultSettings = normalizeVaultSettings(result[VAULT_SETTINGS_KEY]);
+  vaultWebAuthn = isValidVaultWebAuthnPayload(result[VAULT_WEBAUTHN_KEY])
+    ? result[VAULT_WEBAUTHN_KEY]
+    : null;
 
   if (!isVaultEnabled()) {
     vaultUnlocked = true;
     vaultSessionKey = null;
     rulesCache = Array.isArray(result[RULES_KEY]) ? result[RULES_KEY] : [];
+    clearPendingWebAuthnRequests();
     await clearPersistedSessionKey();
+    if (vaultWebAuthn) {
+      await clearVaultWebAuthnConfig();
+    }
     return;
   }
 
   vaultUnlocked = false;
   vaultSessionKey = null;
   rulesCache = [];
+  clearPendingWebAuthnRequests();
   await tryRestoreSession();
 }
 
@@ -397,6 +557,253 @@ async function ensureInitialized() {
 
 function validatePassword(password) {
   return typeof password === "string" && password.length >= 8;
+}
+
+async function clearVaultWebAuthnConfig() {
+  vaultWebAuthn = null;
+  clearPendingWebAuthnRequests();
+  await localRemove(VAULT_WEBAUTHN_KEY);
+}
+
+function validateWebAuthnPrfOutput(prfOutput) {
+  if (typeof prfOutput !== "string") {
+    return false;
+  }
+  try {
+    const bytes = base64ToBytes(prfOutput);
+    return bytes.length >= 16;
+  } catch (error) {
+    return false;
+  }
+}
+
+function validatePendingChallenge(clientDataJSONBase64, expectedChallengeBase64, expectedType) {
+  try {
+    const clientData = parseClientData(clientDataJSONBase64);
+    if (clientData?.type !== expectedType) {
+      return false;
+    }
+    if (!isExpectedClientOrigin(clientData?.origin)) {
+      return false;
+    }
+    const clientChallenge = base64UrlToBytes(clientData?.challenge || "");
+    const expectedChallenge = base64ToBytes(expectedChallengeBase64);
+    return bytesEqual(clientChallenge, expectedChallenge);
+  } catch (error) {
+    return false;
+  }
+}
+
+async function beginVaultWebAuthnSetup() {
+  await ensureInitialized();
+  clearExpiredWebAuthnRequests();
+
+  if (!isVaultEnabled()) {
+    return { ok: false, error: "not-enabled" };
+  }
+  if (!vaultUnlocked || !vaultSessionKey) {
+    return { ok: false, error: "locked" };
+  }
+
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  const userId = crypto.getRandomValues(new Uint8Array(16));
+  const prfSalt = crypto.getRandomValues(new Uint8Array(32));
+
+  pendingWebAuthnSetup = {
+    challenge: bytesToBase64(challenge),
+    prfSalt: bytesToBase64(prfSalt),
+    createdAt: Date.now()
+  };
+
+  const excludeCredentials = vaultWebAuthn?.credentialId
+    ? [sanitizeCredentialDescriptor(vaultWebAuthn)].filter(Boolean)
+    : [];
+
+  return {
+    ok: true,
+    options: {
+      challenge: pendingWebAuthnSetup.challenge,
+      userId: bytesToBase64(userId),
+      rpName: "Multi-pass Vault",
+      userName: "multi-pass-user",
+      userDisplayName: "Multi-pass Vault",
+      timeout: 90_000,
+      pubKeyCredParams: [
+        { type: "public-key", alg: -7 },
+        { type: "public-key", alg: -257 }
+      ],
+      authenticatorAttachment: "platform",
+      residentKey: "preferred",
+      userVerification: "required",
+      prfSalt: pendingWebAuthnSetup.prfSalt,
+      excludeCredentials
+    }
+  };
+}
+
+async function completeVaultWebAuthnSetup(payload) {
+  await ensureInitialized();
+  clearExpiredWebAuthnRequests();
+
+  if (!isVaultEnabled()) {
+    return { ok: false, error: "not-enabled" };
+  }
+  if (!vaultUnlocked || !vaultSessionKey) {
+    return { ok: false, error: "locked" };
+  }
+  if (!pendingWebAuthnSetup) {
+    return { ok: false, error: "webauthn-session-expired" };
+  }
+
+  const localPending = pendingWebAuthnSetup;
+  pendingWebAuthnSetup = null;
+
+  try {
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      typeof payload.credentialId !== "string" ||
+      typeof payload?.response?.clientDataJSON !== "string"
+    ) {
+      return { ok: false, error: "webauthn-invalid-response" };
+    }
+
+    if (!validateWebAuthnPrfOutput(payload.prfOutput)) {
+      return { ok: false, error: "webauthn-prf-unavailable" };
+    }
+
+    const isValidChallenge = validatePendingChallenge(
+      payload.response.clientDataJSON,
+      localPending.challenge,
+      "webauthn.create"
+    );
+    if (!isValidChallenge) {
+      return { ok: false, error: "webauthn-invalid-response" };
+    }
+
+    const wrapKey = await deriveWebAuthnWrapKey(payload.prfOutput, localPending.prfSalt);
+    const rawSessionKey = await exportSessionKey(vaultSessionKey);
+    const wrappedSessionKey = await encryptStringWithKey(rawSessionKey, wrapKey);
+
+    vaultWebAuthn = {
+      version: WEBAUTHN_VERSION,
+      credentialId: payload.credentialId,
+      transports: Array.isArray(payload.transports) ? payload.transports : undefined,
+      prfSalt: localPending.prfSalt,
+      wrappedSessionKey,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    await localSet({ [VAULT_WEBAUTHN_KEY]: vaultWebAuthn });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: "webauthn-setup-failed" };
+  }
+}
+
+async function beginVaultWebAuthnUnlock() {
+  await ensureInitialized();
+  clearExpiredWebAuthnRequests();
+
+  if (!isVaultEnabled()) {
+    return { ok: false, error: "not-enabled" };
+  }
+  if (vaultUnlocked) {
+    return { ok: true, alreadyUnlocked: true };
+  }
+  if (!isValidVaultWebAuthnPayload(vaultWebAuthn)) {
+    return { ok: false, error: "webauthn-not-configured" };
+  }
+
+  const challenge = crypto.getRandomValues(new Uint8Array(32));
+  pendingWebAuthnUnlock = {
+    challenge: bytesToBase64(challenge),
+    createdAt: Date.now()
+  };
+
+  return {
+    ok: true,
+    options: {
+      challenge: pendingWebAuthnUnlock.challenge,
+      timeout: 60_000,
+      userVerification: "required",
+      prfSalt: vaultWebAuthn.prfSalt,
+      allowCredentials: [sanitizeCredentialDescriptor(vaultWebAuthn)].filter(Boolean)
+    }
+  };
+}
+
+async function completeVaultWebAuthnUnlock(payload) {
+  await ensureInitialized();
+  clearExpiredWebAuthnRequests();
+
+  if (!isVaultEnabled()) {
+    return { ok: false, error: "not-enabled" };
+  }
+  if (vaultUnlocked) {
+    return { ok: true };
+  }
+  if (!isValidVaultWebAuthnPayload(vaultWebAuthn)) {
+    return { ok: false, error: "webauthn-not-configured" };
+  }
+  if (!pendingWebAuthnUnlock) {
+    return { ok: false, error: "webauthn-session-expired" };
+  }
+
+  const localPending = pendingWebAuthnUnlock;
+  pendingWebAuthnUnlock = null;
+
+  try {
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      payload.credentialId !== vaultWebAuthn.credentialId ||
+      typeof payload?.response?.clientDataJSON !== "string"
+    ) {
+      return { ok: false, error: "webauthn-invalid-response" };
+    }
+
+    if (!validateWebAuthnPrfOutput(payload.prfOutput)) {
+      return { ok: false, error: "webauthn-prf-unavailable" };
+    }
+
+    const isValidChallenge = validatePendingChallenge(
+      payload.response.clientDataJSON,
+      localPending.challenge,
+      "webauthn.get"
+    );
+    if (!isValidChallenge) {
+      return { ok: false, error: "webauthn-invalid-response" };
+    }
+
+    const wrapKey = await deriveWebAuthnWrapKey(payload.prfOutput, vaultWebAuthn.prfSalt);
+    const rawSessionKey = await decryptStringWithKey(vaultWebAuthn.wrappedSessionKey, wrapKey);
+    const key = await importSessionKey(rawSessionKey);
+    const rules = await decryptRulesWithKey(vaultPayload, key);
+
+    vaultSessionKey = key;
+    vaultUnlocked = true;
+    rulesCache = cloneRules(rules);
+    await persistSessionKey(key);
+    await refreshAllTabs();
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: "webauthn-unlock-failed" };
+  }
+}
+
+async function disableVaultWebAuthn() {
+  await ensureInitialized();
+  if (!isVaultEnabled()) {
+    return { ok: false, error: "not-enabled" };
+  }
+  if (!isValidVaultWebAuthnPayload(vaultWebAuthn)) {
+    return { ok: true };
+  }
+  await clearVaultWebAuthnConfig();
+  return { ok: true };
 }
 
 async function enableVault(password) {
@@ -480,6 +887,7 @@ async function disableVault() {
   const plainRules = cloneRules(rulesCache);
   await localSet({ [RULES_KEY]: plainRules });
   await localRemove(VAULT_PAYLOAD_KEY);
+  await clearVaultWebAuthnConfig();
 
   vaultPayload = null;
   vaultSessionKey = null;
@@ -526,6 +934,9 @@ async function changeVaultPassword(currentPassword, nextPassword) {
     };
 
     await localSet({ [VAULT_PAYLOAD_KEY]: vaultPayload });
+    if (isValidVaultWebAuthnPayload(vaultWebAuthn)) {
+      await clearVaultWebAuthnConfig();
+    }
     vaultSessionKey = nextKey;
     vaultUnlocked = true;
     rulesCache = cloneRules(rules);
@@ -791,6 +1202,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === "getVaultWebAuthnState") {
+    ensureInitialized()
+      .then(() => sendResponse(getVaultWebAuthnStatePayload()))
+      .catch(() =>
+        sendResponse({
+          supported: false,
+          available: false,
+          configured: false
+        })
+      );
+    return true;
+  }
+
   if (message.type === "getVaultSettings") {
     ensureInitialized()
       .then(() => sendResponse({ ok: true, ...getVaultSettingsPayload() }))
@@ -808,6 +1232,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     setVaultLockOnClose(message.lockOnBrowserClose)
       .then((result) => sendResponse(result))
       .catch(() => sendResponse({ ok: false, error: "set-vault-setting-failed" }));
+    return true;
+  }
+
+  if (message.type === "beginVaultWebAuthnSetup") {
+    beginVaultWebAuthnSetup()
+      .then((result) => sendResponse(result))
+      .catch(() => sendResponse({ ok: false, error: "webauthn-setup-failed" }));
+    return true;
+  }
+
+  if (message.type === "completeVaultWebAuthnSetup") {
+    completeVaultWebAuthnSetup(message.payload)
+      .then((result) => sendResponse(result))
+      .catch(() => sendResponse({ ok: false, error: "webauthn-setup-failed" }));
+    return true;
+  }
+
+  if (message.type === "beginVaultWebAuthnUnlock") {
+    beginVaultWebAuthnUnlock()
+      .then((result) => sendResponse(result))
+      .catch(() => sendResponse({ ok: false, error: "webauthn-unlock-failed" }));
+    return true;
+  }
+
+  if (message.type === "completeVaultWebAuthnUnlock") {
+    completeVaultWebAuthnUnlock(message.payload)
+      .then((result) => sendResponse(result))
+      .catch(() => sendResponse({ ok: false, error: "webauthn-unlock-failed" }));
+    return true;
+  }
+
+  if (message.type === "disableVaultWebAuthn") {
+    disableVaultWebAuthn()
+      .then((result) => sendResponse(result))
+      .catch(() => sendResponse({ ok: false, error: "webauthn-disable-failed" }));
     return true;
   }
 
@@ -958,6 +1417,14 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     vaultSettings = normalizeVaultSettings(changes[VAULT_SETTINGS_KEY].newValue);
   }
 
+  if (changes[VAULT_WEBAUTHN_KEY]) {
+    const nextWebAuthn = changes[VAULT_WEBAUTHN_KEY].newValue;
+    vaultWebAuthn = isValidVaultWebAuthnPayload(nextWebAuthn) ? nextWebAuthn : null;
+    if (!vaultWebAuthn) {
+      clearPendingWebAuthnRequests();
+    }
+  }
+
   if (changes[VAULT_PAYLOAD_KEY]) {
     const nextPayload = changes[VAULT_PAYLOAD_KEY].newValue;
     vaultPayload = isValidVaultPayload(nextPayload) ? nextPayload : null;
@@ -968,6 +1435,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       rulesCache = Array.isArray(changes[RULES_KEY]?.newValue)
         ? changes[RULES_KEY].newValue
         : rulesCache;
+      clearPendingWebAuthnRequests();
       clearPersistedSessionKey();
       refreshAllTabs();
       return;

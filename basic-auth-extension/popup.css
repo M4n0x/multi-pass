@@ -458,6 +458,12 @@ button.secondary {
   margin-top: 4px;
 }
 
+.vault-note {
+  margin: 0;
+  color: #52606d;
+  font-size: 11px;
+}
+
 .vault-panel input {
   width: 100%;
   border: 1px solid #d7dde3;

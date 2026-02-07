@@ -131,6 +131,67 @@ export async function changeVaultPassword(currentPassword, nextPassword) {
   );
 }
 
+export async function getVaultWebAuthnState() {
+  const response = await sendRuntimeMessage({ type: "getVaultWebAuthnState" });
+  if (!response || response.supported !== true) {
+    return {
+      supported: false,
+      configured: false,
+      available: false
+    };
+  }
+  return {
+    supported: true,
+    configured: Boolean(response.configured),
+    available: Boolean(response.available)
+  };
+}
+
+export async function beginVaultWebAuthnSetup() {
+  return (
+    (await sendRuntimeMessage({ type: "beginVaultWebAuthnSetup" })) || {
+      ok: false,
+      error: "unavailable"
+    }
+  );
+}
+
+export async function completeVaultWebAuthnSetup(payload) {
+  return (
+    (await sendRuntimeMessage({ type: "completeVaultWebAuthnSetup", payload })) || {
+      ok: false,
+      error: "unavailable"
+    }
+  );
+}
+
+export async function beginVaultWebAuthnUnlock() {
+  return (
+    (await sendRuntimeMessage({ type: "beginVaultWebAuthnUnlock" })) || {
+      ok: false,
+      error: "unavailable"
+    }
+  );
+}
+
+export async function completeVaultWebAuthnUnlock(payload) {
+  return (
+    (await sendRuntimeMessage({ type: "completeVaultWebAuthnUnlock", payload })) || {
+      ok: false,
+      error: "unavailable"
+    }
+  );
+}
+
+export async function disableVaultWebAuthn() {
+  return (
+    (await sendRuntimeMessage({ type: "disableVaultWebAuthn" })) || {
+      ok: false,
+      error: "unavailable"
+    }
+  );
+}
+
 async function getRulesFromVault() {
   const response = await sendRuntimeMessage({ type: "vaultGetRules" });
   if (!response) {

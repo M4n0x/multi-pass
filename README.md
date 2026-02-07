@@ -10,18 +10,24 @@ Multi-pass V2 is a browser extension that supplies HTTP Basic Auth credentials b
 - Regex-based Basic Auth rules with priority ordering.
 - Per-tab status with conflict warnings.
 - **Security vault lock (MV3):** optional master password, encrypted credentials at rest, lock/unlock from popup.
+- **Biometric unlock (MV3):** optional Touch ID / Windows Hello-style unlock via WebAuthn with password fallback.
 - Sync rules from HTTPS JSON snippets (GitLab snippet links supported).
 - Import/export for local rules only.
 - Chromium MV3 and Firefox MV3/MV2 builds.
 
 ## Usage
 1. Load the extension in your browser.
-2. (Optional, recommended) In popup, enable **Secure vault** with a master password.
-3. Open a Basic Auth page and click **Add rule** to create a new entry.
-4. Edit the rule details and **Save**.
-5. Use the options page to import/export or add sync sources.
+2. (Optional, recommended) In Settings → Security, enable the vault with a master password.
+3. (Optional) In Settings → Security, enable biometric unlock.
+4. Open a Basic Auth page and click **Add rule** to create a new entry.
+5. Edit the rule details and **Save**.
+6. Use the options page to import/export or add sync sources.
 
 When vault lock is enabled, credentials are only usable after unlocking the extension in the popup.
+If biometric unlock is enabled, you can unlock with biometrics (when available) or fallback to password.
+Changing or disabling the vault password resets biometric unlock and requires setup again.
+
+> Note: biometric unlock is available on MV3 builds only. MV2 does not expose this security path.
 
 ## Build
 Generate bundles for Chromium and Firefox:
