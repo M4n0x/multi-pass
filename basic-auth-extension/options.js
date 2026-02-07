@@ -5,12 +5,14 @@ import {
   generateId,
   getRules,
   getSyncSources,
+  getVaultSettings,
   getVaultState,
   isValidRegex,
   isVaultLockedError,
   lockVault,
   saveRules,
   saveSyncSources,
+  setVaultLockOnClose,
   unlockVault
 } from "./shared/storage.js";
 
@@ -59,6 +61,7 @@ const securityCurrentPassword = document.getElementById("security-current-passwo
 const securityNextPassword = document.getElementById("security-next-password");
 const securityNextConfirm = document.getElementById("security-next-confirm");
 const securityChangeButton = document.getElementById("security-change-btn");
+const securityLockOnCloseToggle = document.getElementById("security-lock-on-close");
 
 let optionsLocked = false;
 
@@ -222,7 +225,12 @@ async function refreshLockState() {
 }
 
 async function refreshSecurityState() {
-  const vault = await getVaultState();
+  const [vault, settings] = await Promise.all([getVaultState(), getVaultSettings()]);
+
+  if (securityLockOnCloseToggle) {
+    securityLockOnCloseToggle.checked = Boolean(settings.lockOnBrowserClose);
+    securityLockOnCloseToggle.disabled = !settings.supported;
+  }
 
   if (securitySetup) {
     securitySetup.hidden = true;
@@ -910,6 +918,25 @@ async function handleSecurityChangePassword() {
   showSecurityResult("Password updated.");
 }
 
+async function handleSecurityLockOnCloseToggle() {
+  if (!securityLockOnCloseToggle) {
+    return;
+  }
+  const value = Boolean(securityLockOnCloseToggle.checked);
+  const result = await setVaultLockOnClose(value);
+  if (!result.ok) {
+    showSecurityResult("Unable to update lock-on-close setting.", true);
+    securityLockOnCloseToggle.checked = !value;
+    return;
+  }
+  showSecurityResult(
+    value
+      ? "Plugin will lock when browser closes."
+      : "Plugin will stay unlocked across browser restarts.",
+    false
+  );
+}
+
 exportButton.addEventListener("click", handleExport);
 importButton.addEventListener("click", handleFileImport);
 importPasteButton.addEventListener("click", handlePasteImport);
@@ -926,6 +953,7 @@ securityUnlockButton?.addEventListener("click", handleSecurityUnlock);
 securityLockButton?.addEventListener("click", handleSecurityLock);
 securityDisableButton?.addEventListener("click", handleSecurityDisable);
 securityChangeButton?.addEventListener("click", handleSecurityChangePassword);
+securityLockOnCloseToggle?.addEventListener("change", handleSecurityLockOnCloseToggle);
 
 securityUnlockPassword?.addEventListener("keydown", (event) => {
   if (event.key === "Enter") {

@@ -3,8 +3,13 @@ import { STATUS, BADGE_CONFIG } from "./shared/constants.js";
 const RULES_KEY = "rules";
 const VAULT_PAYLOAD_KEY = "vaultPayload";
 const VAULT_SESSION_KEY = "vaultSessionKeyV1";
+const VAULT_PERSISTENT_KEY = "vaultPersistentSessionKeyV1";
+const VAULT_SETTINGS_KEY = "vaultSettings";
 const VAULT_VERSION = 1;
 const VAULT_KDF_ITERATIONS = 210000;
+const DEFAULT_VAULT_SETTINGS = {
+  lockOnBrowserClose: true
+};
 
 const tabStatus = new Map();
 const requestMeta = new Map();
@@ -13,6 +18,7 @@ let rulesCache = [];
 let vaultPayload = null;
 let vaultSessionKey = null;
 let vaultUnlocked = false;
+let vaultSettings = { ...DEFAULT_VAULT_SETTINGS };
 let initPromise = null;
 
 function setBadge(tabId, state) {
@@ -167,6 +173,15 @@ function base64ToBytes(base64) {
   return bytes;
 }
 
+function normalizeVaultSettings(raw) {
+  return {
+    lockOnBrowserClose:
+      typeof raw?.lockOnBrowserClose === "boolean"
+        ? raw.lockOnBrowserClose
+        : DEFAULT_VAULT_SETTINGS.lockOnBrowserClose
+  };
+}
+
 function isVaultEnabled() {
   return Boolean(vaultPayload);
 }
@@ -175,7 +190,15 @@ function getVaultStatePayload() {
   return {
     supported: true,
     enabled: isVaultEnabled(),
-    unlocked: !isVaultEnabled() || vaultUnlocked
+    unlocked: !isVaultEnabled() || vaultUnlocked,
+    lockOnBrowserClose: Boolean(vaultSettings.lockOnBrowserClose)
+  };
+}
+
+function getVaultSettingsPayload() {
+  return {
+    supported: true,
+    lockOnBrowserClose: Boolean(vaultSettings.lockOnBrowserClose)
   };
 }
 
@@ -256,15 +279,23 @@ async function decryptRulesWithKey(payload, key) {
 }
 
 async function persistSessionKey(key) {
-  if (!chrome.storage.session) {
+  const raw = await exportSessionKey(key);
+
+  if (chrome.storage.session) {
+    await sessionSet({ [VAULT_SESSION_KEY]: raw });
+  }
+
+  if (vaultSettings.lockOnBrowserClose) {
+    await localRemove(VAULT_PERSISTENT_KEY);
     return;
   }
-  const raw = await exportSessionKey(key);
-  await sessionSet({ [VAULT_SESSION_KEY]: raw });
+
+  await localSet({ [VAULT_PERSISTENT_KEY]: raw });
 }
 
 async function clearPersistedSessionKey() {
   await sessionRemove(VAULT_SESSION_KEY);
+  await localRemove(VAULT_PERSISTENT_KEY);
 }
 
 async function lockVault({ clearSession = true } = {}) {
@@ -300,14 +331,27 @@ async function tryRestoreSession() {
   if (!isVaultEnabled()) {
     return false;
   }
-  if (!chrome.storage.session) {
+
+  let raw = null;
+
+  if (!vaultSettings.lockOnBrowserClose) {
+    const persisted = await localGet([VAULT_PERSISTENT_KEY]);
+    if (typeof persisted[VAULT_PERSISTENT_KEY] === "string") {
+      raw = persisted[VAULT_PERSISTENT_KEY];
+    }
+  }
+
+  if (!raw && chrome.storage.session) {
+    const result = await sessionGet([VAULT_SESSION_KEY]);
+    if (typeof result[VAULT_SESSION_KEY] === "string") {
+      raw = result[VAULT_SESSION_KEY];
+    }
+  }
+
+  if (!raw) {
     return false;
   }
-  const result = await sessionGet([VAULT_SESSION_KEY]);
-  const raw = result[VAULT_SESSION_KEY];
-  if (!raw || typeof raw !== "string") {
-    return false;
-  }
+
   try {
     const key = await importSessionKey(raw);
     const rules = await decryptRulesWithKey(vaultPayload, key);
@@ -322,9 +366,10 @@ async function tryRestoreSession() {
 }
 
 async function initializeState() {
-  const result = await localGet([RULES_KEY, VAULT_PAYLOAD_KEY]);
+  const result = await localGet([RULES_KEY, VAULT_PAYLOAD_KEY, VAULT_SETTINGS_KEY]);
   const payload = result[VAULT_PAYLOAD_KEY];
   vaultPayload = isValidVaultPayload(payload) ? payload : null;
+  vaultSettings = normalizeVaultSettings(result[VAULT_SETTINGS_KEY]);
 
   if (!isVaultEnabled()) {
     vaultUnlocked = true;
@@ -491,6 +536,28 @@ async function changeVaultPassword(currentPassword, nextPassword) {
   } catch (error) {
     return { ok: false, error: "invalid-password" };
   }
+}
+
+async function setVaultLockOnClose(lockOnBrowserClose) {
+  await ensureInitialized();
+  vaultSettings = normalizeVaultSettings({ lockOnBrowserClose });
+  await localSet({ [VAULT_SETTINGS_KEY]: vaultSettings });
+
+  if (vaultSettings.lockOnBrowserClose) {
+    await localRemove(VAULT_PERSISTENT_KEY);
+    if (vaultSessionKey && chrome.storage.session) {
+      const raw = await exportSessionKey(vaultSessionKey);
+      await sessionSet({ [VAULT_SESSION_KEY]: raw });
+    }
+  } else if (vaultSessionKey) {
+    const raw = await exportSessionKey(vaultSessionKey);
+    await localSet({ [VAULT_PERSISTENT_KEY]: raw });
+    if (chrome.storage.session) {
+      await sessionSet({ [VAULT_SESSION_KEY]: raw });
+    }
+  }
+
+  return { ok: true, lockOnBrowserClose: vaultSettings.lockOnBrowserClose };
 }
 
 async function lockVaultAndRefresh() {
@@ -713,7 +780,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "getVaultState") {
     ensureInitialized()
       .then(() => sendResponse(getVaultStatePayload()))
-      .catch(() => sendResponse({ supported: true, enabled: false, unlocked: true }));
+      .catch(() =>
+        sendResponse({
+          supported: true,
+          enabled: false,
+          unlocked: true,
+          lockOnBrowserClose: DEFAULT_VAULT_SETTINGS.lockOnBrowserClose
+        })
+      );
+    return true;
+  }
+
+  if (message.type === "getVaultSettings") {
+    ensureInitialized()
+      .then(() => sendResponse({ ok: true, ...getVaultSettingsPayload() }))
+      .catch(() =>
+        sendResponse({
+          ok: false,
+          supported: true,
+          lockOnBrowserClose: DEFAULT_VAULT_SETTINGS.lockOnBrowserClose
+        })
+      );
+    return true;
+  }
+
+  if (message.type === "setVaultLockOnClose") {
+    setVaultLockOnClose(message.lockOnBrowserClose)
+      .then((result) => sendResponse(result))
+      .catch(() => sendResponse({ ok: false, error: "set-vault-setting-failed" }));
     return true;
   }
 
@@ -828,6 +922,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") {
     return;
+  }
+
+  if (changes[VAULT_SETTINGS_KEY]) {
+    vaultSettings = normalizeVaultSettings(changes[VAULT_SETTINGS_KEY].newValue);
   }
 
   if (changes[VAULT_PAYLOAD_KEY]) {

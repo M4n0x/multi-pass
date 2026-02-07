@@ -415,6 +415,19 @@ input[type="file"] {
   text-align: center;
 }
 
+.security-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #334155;
+}
+
+.security-toggle input {
+  width: 16px;
+  height: 16px;
+}
+
 .security-note {
   font-size: 13px;
   color: #52606d;

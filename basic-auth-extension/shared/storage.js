@@ -45,14 +45,41 @@ export async function getVaultState() {
     return {
       supported: false,
       enabled: false,
-      unlocked: true
+      unlocked: true,
+      lockOnBrowserClose: true
     };
   }
   return {
     supported: true,
     enabled: Boolean(response.enabled),
-    unlocked: Boolean(response.unlocked)
+    unlocked: Boolean(response.unlocked),
+    lockOnBrowserClose:
+      typeof response.lockOnBrowserClose === "boolean" ? response.lockOnBrowserClose : true
   };
+}
+
+export async function getVaultSettings() {
+  const response = await sendRuntimeMessage({ type: "getVaultSettings" });
+  if (!response || response.supported !== true) {
+    return {
+      supported: false,
+      lockOnBrowserClose: true
+    };
+  }
+  return {
+    supported: true,
+    lockOnBrowserClose:
+      typeof response.lockOnBrowserClose === "boolean" ? response.lockOnBrowserClose : true
+  };
+}
+
+export async function setVaultLockOnClose(lockOnBrowserClose) {
+  return (
+    (await sendRuntimeMessage({ type: "setVaultLockOnClose", lockOnBrowserClose })) || {
+      ok: false,
+      error: "unavailable"
+    }
+  );
 }
 
 export async function unlockVault(password) {
