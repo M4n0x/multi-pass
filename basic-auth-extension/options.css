@@ -388,6 +388,18 @@ input[type="file"] {
   flex: 1;
 }
 
+.security-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.security-actions button {
+  min-width: 120px;
+  text-align: center;
+}
+
 .security-note {
   font-size: 13px;
   color: #52606d;
