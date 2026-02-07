@@ -919,21 +919,34 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
+async function getNormalWindowCount() {
+  try {
+    const normalWindows = await chrome.windows.getAll({ windowTypes: ["normal"] });
+    return normalWindows.length;
+  } catch (error) {
+    const windows = await chrome.windows.getAll({});
+    return windows.filter((win) => !win.type || win.type === "normal").length;
+  }
+}
+
 async function maybeLockVaultOnLastWindowClose() {
   await ensureInitialized();
   if (!vaultSettings.lockOnBrowserClose || !isVaultEnabled() || !vaultUnlocked) {
     return;
   }
-  const windows = await chrome.windows.getAll({});
-  if (windows.length === 0) {
+
+  const normalWindowCount = await getNormalWindowCount();
+  if (normalWindowCount === 0) {
     await lockVault({ clearSession: true });
   }
 }
 
 chrome.windows.onRemoved.addListener(() => {
-  maybeLockVaultOnLastWindowClose().catch(() => {
-    return;
-  });
+  setTimeout(() => {
+    maybeLockVaultOnLastWindowClose().catch(() => {
+      return;
+    });
+  }, 150);
 });
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -996,6 +1009,14 @@ async function refreshAllTabs() {
   }
 }
 
+async function enforceStartupLockIfNeeded() {
+  await ensureInitialized();
+  if (!isVaultEnabled() || !vaultSettings.lockOnBrowserClose) {
+    return;
+  }
+  await lockVault({ clearSession: true });
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   ensureInitialized()
     .then(() => refreshAllTabs())
@@ -1006,6 +1027,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
 chrome.runtime.onStartup.addListener(() => {
   ensureInitialized()
+    .then(() => enforceStartupLockIfNeeded())
     .then(() => refreshAllTabs())
     .catch(() => {
       return;
