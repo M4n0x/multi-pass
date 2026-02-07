@@ -123,14 +123,24 @@ function mapVaultError(code) {
 }
 
 function setActiveTab(tab) {
-  const importActive = tab !== "security";
+  const securityAvailable = !(tabSecurityButton && tabSecurityButton.hidden);
+  const importActive = tab !== "security" || !securityAvailable;
   tabImportButton?.classList.toggle("active", importActive);
-  tabSecurityButton?.classList.toggle("active", !importActive);
+  tabSecurityButton?.classList.toggle("active", !importActive && securityAvailable);
   if (tabImportPanel) {
     tabImportPanel.hidden = !importActive;
   }
   if (tabSecurityPanel) {
-    tabSecurityPanel.hidden = importActive;
+    tabSecurityPanel.hidden = importActive || !securityAvailable;
+  }
+}
+
+function setSecurityTabVisibility(visible) {
+  if (tabSecurityButton) {
+    tabSecurityButton.hidden = !visible;
+  }
+  if (!visible) {
+    setActiveTab("import");
   }
 }
 
@@ -228,10 +238,12 @@ async function refreshSecurityState() {
   }
 
   if (!vault.supported) {
-    showSecurityResult("Vault controls are not available in this browser build.", true);
+    clearSecurityResult();
+    setSecurityTabVisibility(false);
     return vault;
   }
 
+  setSecurityTabVisibility(true);
   clearSecurityResult();
 
   if (!vault.enabled) {
