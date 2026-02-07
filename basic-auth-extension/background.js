@@ -1,4 +1,18 @@
-import { STATUS, BADGE_CONFIG } from "./shared/constants.js";
+const STATUS = {
+  IDLE: "idle",
+  OK: "ok",
+  AUTH_FAILED: "auth_failed",
+  CONFLICT: "conflict",
+  LOCKED: "locked"
+};
+
+const BADGE_CONFIG = {
+  ok: { text: " ", color: "#4CAF50" },
+  auth_failed: { text: " ", color: "#F44336" },
+  conflict: { text: " ", color: "#FFC107" },
+  locked: { text: "🔒", color: "#6366F1" },
+  idle: { text: "", color: "#9E9E9E" }
+};
 
 const RULES_KEY = "rules";
 const VAULT_PAYLOAD_KEY = "vaultPayload";
