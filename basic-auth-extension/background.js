@@ -508,13 +508,14 @@ async function updateTabStatusForUrl(tabId, url) {
   if (tabId < 0) {
     return;
   }
-  if (!url || !url.startsWith("http")) {
-    setTabStatus(tabId, STATUS.IDLE, null, url || "");
+
+  if (isVaultEnabled() && !vaultUnlocked) {
+    setTabStatus(tabId, STATUS.LOCKED, null, url || "", []);
     return;
   }
 
-  if (isVaultEnabled() && !vaultUnlocked) {
-    setTabStatus(tabId, STATUS.LOCKED, null, url, []);
+  if (!url || !url.startsWith("http")) {
+    setTabStatus(tabId, STATUS.IDLE, null, url || "");
     return;
   }
 

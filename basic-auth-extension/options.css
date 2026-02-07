@@ -396,6 +396,12 @@ input[type="file"] {
   flex: 1;
 }
 
+.security-actions-row {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
 .security-actions {
   display: flex;
   flex-wrap: wrap;

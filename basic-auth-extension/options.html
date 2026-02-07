@@ -99,10 +99,6 @@
               <h2>Vault lock</h2>
               <p>Protect local credentials with a master password.</p>
             </div>
-            <div id="security-open-actions" class="security-actions" hidden>
-              <button id="security-lock-btn" type="button" class="secondary">Lock now</button>
-              <button id="security-disable-btn" type="button" class="danger">Disable lock</button>
-            </div>
           </div>
 
           <div id="security-setup" hidden>
@@ -128,6 +124,12 @@
               <input id="security-next-password" type="password" placeholder="New password" />
               <input id="security-next-confirm" type="password" placeholder="Confirm new password" />
               <button id="security-change-btn" type="button">Change password</button>
+            </div>
+            <div id="security-open-actions" class="security-actions-row" hidden>
+              <div class="security-actions">
+                <button id="security-lock-btn" type="button" class="secondary">Lock now</button>
+                <button id="security-disable-btn" type="button" class="danger">Disable lock</button>
+              </div>
             </div>
           </div>
 
