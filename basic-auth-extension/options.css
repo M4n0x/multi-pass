@@ -58,6 +58,74 @@ p {
   gap: 12px;
 }
 
+.sync-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+}
+
+.sync-warning-icon {
+  font-size: 14px;
+}
+
+.sync-popover-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sync-popover-trigger {
+  margin-left: 6px;
+  font-weight: 600;
+  text-decoration: underline;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font-size: 12px;
+}
+
+.sync-popover {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  width: 360px;
+  max-width: 420px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: #1f2933;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+  z-index: 10;
+}
+
+@media (max-width: 520px) {
+  .sync-popover {
+    width: calc(100vw - 40px);
+  }
+}
+
+.sync-popover::before {
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 10px;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-left: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0;
+  transform: rotate(45deg);
+}
+
 .sync-controls {
   display: flex;
   flex-wrap: wrap;

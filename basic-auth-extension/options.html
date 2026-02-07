@@ -44,6 +44,26 @@
       <section class="panel">
         <h2>Sync from URL</h2>
         <p>Add a HTTPS link to a JSON snippet (GitLab snippet links are supported).</p>
+        <div class="sync-warning">
+          <span class="sync-warning-icon">⚠️</span>
+          <span>
+            Only add sources you trust. Synced rules can overwrite credentials.
+            <span class="sync-popover-wrap">
+              <button
+                id="sync-warning-why"
+                class="sync-popover-trigger"
+                type="button"
+                aria-expanded="false"
+                aria-controls="sync-warning-popover"
+              >
+                Why?
+              </button>
+              <div id="sync-warning-popover" class="sync-popover" role="dialog" hidden>
+                Remote sources can change without notice. Verify the JSON content and host before syncing.
+              </div>
+            </span>
+          </span>
+        </div>
         <div class="sync-controls">
           <input id="sync-label" type="text" placeholder="Label (optional)" />
           <input id="sync-url" type="url" placeholder="https://..." />
