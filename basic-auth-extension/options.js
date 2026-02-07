@@ -1,7 +1,9 @@
 import {
   beginVaultWebAuthnSetup,
+  beginVaultWebAuthnUnlock,
   changeVaultPassword,
   completeVaultWebAuthnSetup,
+  completeVaultWebAuthnUnlock,
   disableVault,
   disableVaultWebAuthn,
   enableVault,
@@ -19,7 +21,7 @@ import {
   setVaultLockOnClose,
   unlockVault
 } from "./shared/storage.js";
-import { detectWebAuthnSupport, runWebAuthnSetup } from "./shared/webauthn.js";
+import { detectWebAuthnSupport, runWebAuthnSetup, runWebAuthnUnlock } from "./shared/webauthn.js";
 
 const exportButton = document.getElementById("export-btn");
 const exportResult = document.getElementById("export-result");
@@ -58,6 +60,8 @@ const securityEnableButton = document.getElementById("security-enable-btn");
 
 const securityUnlockPassword = document.getElementById("security-unlock-password");
 const securityUnlockButton = document.getElementById("security-unlock-btn");
+const securityWebAuthnUnlockButton = document.getElementById("security-webauthn-unlock");
+const securityWebAuthnLockedNote = document.getElementById("security-webauthn-locked-note");
 
 const securityLockButton = document.getElementById("security-lock-btn");
 const securityDisableButton = document.getElementById("security-disable-btn");
@@ -145,6 +149,17 @@ function renderSecurityWebAuthn(state) {
   }
 }
 
+function renderSecurityLockedWebAuthn(state) {
+  if (securityWebAuthnUnlockButton) {
+    securityWebAuthnUnlockButton.hidden = !state?.show;
+    securityWebAuthnUnlockButton.disabled = !state?.show || securityWebAuthnBusy;
+  }
+  if (securityWebAuthnLockedNote) {
+    securityWebAuthnLockedNote.hidden = !state?.note;
+    securityWebAuthnLockedNote.textContent = state?.note || "";
+  }
+}
+
 function mapVaultError(code) {
   switch (code) {
     case "weak-password":
@@ -175,13 +190,15 @@ function mapWebAuthnError(code) {
     case "webauthn-cancelled":
       return "Biometric setup was cancelled.";
     case "webauthn-session-expired":
-      return "Biometric setup request expired. Try again.";
+      return "Biometric request expired. Try again.";
     case "webauthn-invalid-response":
       return "Biometric response was invalid. Try again.";
     case "webauthn-security-error":
       return "Biometric security validation failed.";
     case "webauthn-setup-failed":
       return "Biometric setup failed. Try again.";
+    case "webauthn-unlock-failed":
+      return "Biometric unlock failed. Use password and try again.";
     default:
       return "Biometric action failed.";
   }
@@ -312,6 +329,7 @@ async function refreshSecurityState() {
     securityOpenActions.hidden = true;
   }
   renderSecurityWebAuthn({ show: false });
+  renderSecurityLockedWebAuthn({ show: false, note: "" });
 
   if (!vault.supported) {
     clearSecurityResult();
@@ -333,6 +351,30 @@ async function refreshSecurityState() {
     if (securityLocked) {
       securityLocked.hidden = false;
     }
+
+    const canUseBiometrics = Boolean(
+      supportInfo.supported &&
+        supportInfo.platformAuthenticator &&
+        webAuthnState.supported &&
+        webAuthnState.available &&
+        webAuthnState.configured
+    );
+
+    let lockedNote = "";
+    if (!supportInfo.supported) {
+      lockedNote = "Biometric unlock is unavailable in this browser context.";
+    } else if (!supportInfo.platformAuthenticator) {
+      lockedNote = "No platform authenticator detected on this device.";
+    } else if (!webAuthnState.supported || !webAuthnState.available) {
+      lockedNote = "Biometric unlock is unavailable for this vault.";
+    } else if (!webAuthnState.configured) {
+      lockedNote = "Enable biometric unlock first after unlocking with password.";
+    }
+
+    renderSecurityLockedWebAuthn({
+      show: canUseBiometrics,
+      note: canUseBiometrics ? "" : lockedNote
+    });
     return vault;
   }
 
@@ -974,6 +1016,50 @@ async function handleSecurityUnlock() {
   await refreshView();
 }
 
+async function handleSecurityWebAuthnUnlock() {
+  if (securityWebAuthnBusy) {
+    return;
+  }
+
+  clearSecurityResult();
+  securityWebAuthnBusy = true;
+  renderSecurityLockedWebAuthn({
+    show: Boolean(securityWebAuthnUnlockButton && !securityWebAuthnUnlockButton.hidden),
+    note: ""
+  });
+
+  try {
+    const begin = await beginVaultWebAuthnUnlock();
+    if (!begin?.ok) {
+      showSecurityResult(mapWebAuthnError(begin?.error), true);
+      return;
+    }
+
+    if (begin.alreadyUnlocked) {
+      showSecurityResult("Vault already unlocked.");
+      return;
+    }
+
+    const credential = await runWebAuthnUnlock(begin.options || {});
+    const complete = await completeVaultWebAuthnUnlock(credential);
+    if (!complete?.ok) {
+      showSecurityResult(mapWebAuthnError(complete?.error), true);
+      return;
+    }
+
+    if (securityUnlockPassword) {
+      securityUnlockPassword.value = "";
+    }
+    showSecurityResult("Vault unlocked with biometrics.");
+  } catch (error) {
+    showSecurityResult(mapWebAuthnError(error?.code), true);
+  } finally {
+    securityWebAuthnBusy = false;
+    await refreshSecurityState();
+    await refreshView();
+  }
+}
+
 async function handleSecurityLock() {
   clearSecurityResult();
   const result = await lockVault();
@@ -1115,6 +1201,7 @@ tabSecurityButton?.addEventListener("click", async () => {
 
 securityEnableButton?.addEventListener("click", handleSecurityEnable);
 securityUnlockButton?.addEventListener("click", handleSecurityUnlock);
+securityWebAuthnUnlockButton?.addEventListener("click", handleSecurityWebAuthnUnlock);
 securityLockButton?.addEventListener("click", handleSecurityLock);
 securityDisableButton?.addEventListener("click", handleSecurityDisable);
 securityChangeButton?.addEventListener("click", handleSecurityChangePassword);
